@@ -24,7 +24,7 @@ import (
 	"net"
 )
 
-// Link represents information corresponding to a single interface on the
+// Interface represents information corresponding to a single interface on the
 // underlying system.
 type Interface struct {
 	// Index is an integer index used to refer to the interface.
@@ -35,8 +35,8 @@ type Interface struct {
 	MAC net.HardwareAddr
 }
 
-// ARPNeigh is a representation of an ARP entry on the underlying system.
-type ARPNeigh struct {
+// ARPEntry is a representation of an ARP entry on the underlying system.
+type ARPEntry struct {
 	// IP is the IP address of the neighbour.
 	IP net.IP
 	// Interface is the name of the interface on which the ARP entry was learnt.
@@ -62,7 +62,7 @@ type ARPUpdate struct {
 	// Type indicates whether the event was an add or delete.
 	Type ARPEvent
 	// Neigh is the neighbour that the change corresponds to
-	Neigh ARPNeigh
+	Neigh ARPEntry
 }
 
 // NetworkAccessor is an interface implemented by the underlying system access
@@ -95,27 +95,27 @@ func (u unimplementedAccessor) Interface(_ string) (*Interface, error) {
 }
 
 // Interfaces returns unimplemented when asked to list interfaces.
-func (n unimplementedAccessor) Interfaces() ([]*Interface, error) {
+func (u unimplementedAccessor) Interfaces() ([]*Interface, error) {
 	return nil, fmt.Errorf("unimplemented")
 }
 
 // InterfaceAddresses returns unimplemented when asked for list IP addresses.
-func (n unimplementedAccessor) InterfaceAddresses(_ string) ([]*net.IPNet, error) {
+func (u unimplementedAccessor) InterfaceAddresses(_ string) ([]*net.IPNet, error) {
 	return nil, fmt.Errorf("unimplemented")
 }
 
 // AddInterfaceIP returns unimplemented when asked to add an interface.
-func (n unimplementedAccessor) AddInterfaceIP(_ string, _ *net.IPNet) error {
+func (u unimplementedAccessor) AddInterfaceIP(_ string, _ *net.IPNet) error {
 	return fmt.Errorf("unimplemented")
 }
 
 // ARPList returns unimplemented when asked to list ARP entries.
-func (n unimplementedAccessor) ARPList() ([]*ARPNeigh, error) {
+func (u unimplementedAccessor) ARPList() ([]*ARPNeigh, error) {
 	return nil, fmt.Errorf("unimplemented")
 }
 
 // ARPSubscribe returns unimplemented when asked to subscribe to ARP changes.
-func (n unimplementedAccessor) ARPSubscribe(_ chan ARPUpdate, _ chan struct{}) error {
+func (u unimplementedAccessor) ARPSubscribe(_ chan ARPUpdate, _ chan struct{}) error {
 	return fmt.Errorf("unimplemented")
 }
 
