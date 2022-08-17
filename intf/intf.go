@@ -79,7 +79,7 @@ type NetworkAccessor interface {
 	// AddressAdd adds address ip to the interface name.
 	AddInterfaceIP(name string, ip *net.IPNet) error
 	// ARPList lists the set of ARP neighbours on the system.
-	ARPList() ([]*ARPNeigh, error)
+	ARPList() ([]*ARPEntry, error)
 	// ARPSubscribe writes changes to the ARP table to the channel updates, and uses
 	// done to indicate that the subscription is complete.
 	ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error
@@ -110,7 +110,7 @@ func (u unimplementedAccessor) AddInterfaceIP(_ string, _ *net.IPNet) error {
 }
 
 // ARPList returns unimplemented when asked to list ARP entries.
-func (u unimplementedAccessor) ARPList() ([]*ARPNeigh, error) {
+func (u unimplementedAccessor) ARPList() ([]*ARPEntry, error) {
 	return nil, fmt.Errorf("unimplemented")
 }
 
