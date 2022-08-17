@@ -20,6 +20,7 @@
 package intf
 
 import (
+	"context"
 	"fmt"
 	"net"
 )
@@ -40,7 +41,7 @@ type ARPEntry struct {
 	// IP is the IP address of the neighbour.
 	IP net.IP
 	// Interface is the name of the interface on which the ARP entry was learnt.
-	Interface string
+	Interface *Interface
 	// MAC is the MAC address of the neighbour.
 	MAC net.HardwareAddr
 }
@@ -79,9 +80,12 @@ type NetworkAccessor interface {
 	// AddressAdd adds address ip to the interface name.
 	AddInterfaceIP(name string, ip *net.IPNet) error
 	// ARPList lists the set of ARP neighbours on the system.
-	ARPList() ([]*ARPNeigh, error)
+	ARPList() ([]*ARPEntry, error)
 	// ARPSubscribe writes changes to the ARP table to the channel updates, and uses
-	// done to indicate that the subscription is complete.
+	// done to indicate that the subscription is complete. The ARPSubscribe function
+	// should not be blocking and rather return once it has started a separate goroutine
+	// that writes updates to the updates channel, and can be cancelled by sending a
+	// message to the done channel.
 	ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error
 }
 
@@ -110,7 +114,7 @@ func (u unimplementedAccessor) AddInterfaceIP(_ string, _ *net.IPNet) error {
 }
 
 // ARPList returns unimplemented when asked to list ARP entries.
-func (u unimplementedAccessor) ARPList() ([]*ARPNeigh, error) {
+func (u unimplementedAccessor) ARPList() ([]*ARPEntry, error) {
 	return nil, fmt.Errorf("unimplemented")
 }
 
@@ -153,4 +157,57 @@ func AddIP(intf string, addr *net.IPNet) error {
 		return fmt.Errorf("cannot add address, %v", err)
 	}
 	return nil
+}
+
+// AwaitARP waits for the IPv4 address addr to be resolved via ARP. It uses the supplied
+// context to determine whether it should continue awaiting the entry. If the ARP entry
+// is resolved, it is returned directly.
+func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
+	neighs, err := accessor.ARPList()
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve list of ARP entries, %v", err)
+	}
+
+	for _, n := range neighs {
+		if addr.Equal(n.IP) {
+			return n.MAC, nil
+		}
+	}
+
+	updates := make(chan ARPUpdate, 1)
+	result := make(chan ARPUpdate, 1)
+	done := make(chan struct{})
+
+	go func(updates chan ARPUpdate, done chan struct{}) {
+		for {
+			select {
+			case upd := <-updates:
+				if upd.Type == ARPAdd {
+					if addr.Equal(upd.Neigh.IP) {
+						result <- upd
+					}
+				}
+			case <-done:
+				return
+			}
+		}
+	}(updates, done)
+
+	var rErr error
+	if err := accessor.ARPSubscribe(updates, done); err != nil {
+		rErr = fmt.Errorf("cannot subscribe to ARP updates, err: %v", err)
+	}
+
+	if rErr != nil {
+		return nil, rErr
+	}
+
+	select {
+	case n := <-result:
+		done <- struct{}{}
+		return n.Neigh.MAC, nil
+	case <-ctx.Done():
+		done <- struct{}{}
+		return nil, ctx.Err()
+	}
 }

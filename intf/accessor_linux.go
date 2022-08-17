@@ -53,6 +53,19 @@ func (n netlinkAccessor) Interface(name string) (*Interface, error) {
 	}, nil
 }
 
+// interfaceByIndex retrieves an interface based on its underlying netlink index.
+func interfaceByIndex(idx int) (*Interface, error) {
+	link, err := netlink.LinkByIndex(idx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot find link by index %d", idx)
+	}
+	return &Interface{
+		Index: idx,
+		Name: link.Attrs().Name,
+		MAC: link.Attrs().HardwareAddr,
+	}, nil
+}
+
 // InterfaceAddresses retrieves the set of addresses that are configured on interface
 // name. It returns the addresses as a set of net.IPNet structs including the address
 // and mask of each interface.
@@ -82,5 +95,50 @@ func (n netlinkAccessor) InterfaceAddIP(name string, addr *net.IPNet) error {
 	if err := netlink.AddrAdd(link, &netlink.Addr{IPNet: addr}); err != nil {
 		return fmt.Errorf("cannot add IP address to interface %s, %v", name, err)
 	}
+	return nil
+}
+
+// ARPSubscribe makes a subscription to the netlink ARP table and writes the results
+// that are returned to the updates channel as ARPUpdate messages. The done channel is
+// used to cancel the subscription which is spawned in a separate goroutine.
+func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct {}) error {
+	nlUpdates := make(chan netlink.NeighUpdate)
+
+	go func() {
+		for {
+			select {
+			case upd := <-nlChan:
+				u := ARPUpdate{
+					Type: ARPUnknown,
+					Neigh: ARPEntry{
+						IP: upd.Neigh.IP,
+						MAC: upd.Neigh.HardwareAddr
+					}
+				}
+				switch upd.Type {
+				case RTM_NEWNEIGH:
+					u.Type = ARPAdd
+				case RTM_DELNEIGH:
+					u.Type = ARPDelete
+				}
+
+				intf, err := interfaceByIndex(upd.Neigh.LinkIndex)
+				if err != nil {
+					// TODO(robjs): Determine what to do here, since this is an internal
+					// error from netlink. We can ignore it for the moment since it meant
+					// that an interface went away during our subscription.
+				}
+				u.Neigh.Interface = intf
+				updates <- u
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	if err := netlink.NeighSubscribe(nlUpdates, nlDone); err != nil {
+		return nil, fmt.Errorf("cannot subscribe to neighbours, err: %v", err)
+	}
+
 	return nil
 }
