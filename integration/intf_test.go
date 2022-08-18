@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,15 +40,19 @@ func TestNeighSubscribe(t *testing.T) {
 		HardwareAddr: m,
 	}
 
-	var rErr error
+	var (
+		wg   sync.WaitGroup
+		rErr error
+	)
+	wg.Add(1)
 	go func() {
 		time.Sleep(2 * time.Second)
 		if err := netlink.NeighAdd(fakeNeigh); err != nil {
 			// Cancel the context, subsequent calls will fail.
 			cancel()
 			rErr = err
-			return
 		}
+		wg.Done()
 	}()
 
 	mac, err := intf.AwaitARP(ctx, net.ParseIP("192.0.2.1"))
@@ -59,6 +64,7 @@ func TestNeighSubscribe(t *testing.T) {
 		t.Errorf("did not get expected MAC, got: %v, want: %v", mac, m)
 	}
 
+	wg.Wait()
 	if rErr != nil {
 		t.Errorf("did not set ARP neighbour, got err: %v", err)
 	}
