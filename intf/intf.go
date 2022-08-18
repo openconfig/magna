@@ -127,6 +127,11 @@ func (u unimplementedAccessor) ARPSubscribe(_ chan ARPUpdate, _ chan struct{}) e
 // should be set by init() [which may be a platform-specific initiation].
 var accessor NetworkAccessor
 
+// InterfaceByName returns an interface's attributes  by the name of the interface.
+func InterfaceByName(name string) (*Interface, error) {
+	return accessor.Interface(name)
+}
+
 // ValidInterface determines whether the interface name is valid for the
 // current system.
 func ValidInterface(name string) bool {
@@ -193,13 +198,8 @@ func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
 		}
 	}(updates, done)
 
-	var rErr error
 	if err := accessor.ARPSubscribe(updates, done); err != nil {
-		rErr = fmt.Errorf("cannot subscribe to ARP updates, err: %v", err)
-	}
-
-	if rErr != nil {
-		return nil, rErr
+		return nil, fmt.Errorf("cannot subscribe to ARP updates, err: %v", err)
 	}
 
 	select {

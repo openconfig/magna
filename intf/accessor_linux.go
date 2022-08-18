@@ -21,6 +21,13 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+const (
+	// RTM_NEWNEIGH is the event sent from netlink when an ARP entry is added.
+	RTM_NEWNEIGH uint16 = 28
+	// RTM_DELNEIGH is the event sent from netlink when an ARP entry is removed.
+	RTM_DELNEIGH uint16 = 29
+)
+
 func init() {
 	// On init when the package has been built on Linux, load the netlink
 	// accessor as the implementation to be used.
@@ -98,6 +105,29 @@ func (n netlinkAccessor) InterfaceAddIP(name string, addr *net.IPNet) error {
 	return nil
 }
 
+// ARPList lists the current entries in the ARP table of the system and returns them
+// as parsed out ARPEntry structs. It uses the netlink neighbour list as a data source.
+func (n netlinkAccessor) ARPList() ([]*ARPEntry, error) {
+	neighs, err := netlink.NeighList(0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve ARP list, %v", err)
+	}
+
+	entries := []*ARPEntry{}
+	for _, n := range neighs {
+		intf, err := interfaceByIndex(n.LinkIndex)
+		if err != nil {
+			return nil, fmt.Errorf("cannot find link for neighbour %v, err: %v", n, err)
+		}
+		entries = append(entries, &ARPEntry{
+			IP:        n.IP,
+			MAC:       n.HardwareAddr,
+			Interface: intf,
+		})
+	}
+	return entries, nil
+}
+
 // ARPSubscribe makes a subscription to the netlink ARP table and writes the results
 // that are returned to the updates channel as ARPUpdate messages. The done channel is
 // used to cancel the subscription which is spawned in a separate goroutine.
@@ -107,7 +137,7 @@ func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct{}
 	go func() {
 		for {
 			select {
-			case upd := <-nlChan:
+			case upd := <-nlUpdates:
 				u := ARPUpdate{
 					Type: ARPUnknown,
 					Neigh: ARPEntry{
@@ -136,8 +166,8 @@ func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct{}
 		}
 	}()
 
-	if err := netlink.NeighSubscribe(nlUpdates, nlDone); err != nil {
-		return nil, fmt.Errorf("cannot subscribe to neighbours, err: %v", err)
+	if err := netlink.NeighSubscribe(nlUpdates, done); err != nil {
+		return fmt.Errorf("cannot subscribe to neighbours, err: %v", err)
 	}
 
 	return nil
