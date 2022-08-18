@@ -60,6 +60,26 @@ func (n netlinkAccessor) Interface(name string) (*Interface, error) {
 	}, nil
 }
 
+// Interfaces retrieves the list of interfaces on the local system and returns them as a
+// parsed set of interfaces.
+func (n netlinkAccessor) Interfaces() ([]*Interface, error) {
+	ints, err := netlink.LinkList()
+	if err != nil {
+		return nil, fmt.Errorf("cannot list interfaces, %v", err)
+	}
+
+	intfs := []*Interface{}
+	for _, i := range ints {
+		attrs := i.Attrs()
+		intfs = append(intfs, &Interface{
+			Index: attrs.Index,
+			Name:  attrs.Name,
+			MAC:   attrs.HardwareAddr,
+		})
+	}
+	return intfs, nil
+}
+
 // interfaceByIndex retrieves an interface based on its underlying netlink index.
 func interfaceByIndex(idx int) (*Interface, error) {
 	link, err := netlink.LinkByIndex(idx)

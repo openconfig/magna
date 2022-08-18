@@ -41,8 +41,10 @@ func TestNeighSubscribe(t *testing.T) {
 
 	var rErr error
 	go func() {
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 		if err := netlink.NeighAdd(fakeNeigh); err != nil {
+			// Cancel the context, subsequent calls will fail.
+			cancel()
 			rErr = err
 			return
 		}
@@ -50,18 +52,31 @@ func TestNeighSubscribe(t *testing.T) {
 
 	mac, err := intf.AwaitARP(ctx, net.ParseIP("192.0.2.1"))
 	if err != nil {
-		t.Fatalf("cannot create subscription, %v", err)
+		t.Errorf("cannot create subscription, %v", err)
 	}
 
 	if !cmp.Equal(mac, m) {
-		t.Fatalf("did not get expected MAC, got: %v, want: %v", mac, m)
+		t.Errorf("did not get expected MAC, got: %v, want: %v", mac, m)
 	}
 
 	if rErr != nil {
-		t.Fatalf("error occurred in adding entry, %v", err)
+		t.Errorf("did not set ARP neighbour, got err: %v", err)
 	}
 
 	if err := netlink.NeighDel(fakeNeigh); err != nil {
 		t.Fatalf("cannot delete fake neighbour, %v", err)
 	}
+}
+
+func TestInterfaces(t *testing.T) {
+	ints, err := intf.Interfaces()
+	if err != nil {
+		t.Fatalf("cannot retrieve interfaces, err: %v", err)
+	}
+
+	if len(ints) == 0 {
+		t.Fatalf("zero interfaces returned, %v", ints)
+	}
+
+	t.Logf("Got interfaces: %v", ints)
 }

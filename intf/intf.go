@@ -36,6 +36,11 @@ type Interface struct {
 	MAC net.HardwareAddr
 }
 
+// String is the string representation of an interface that can be read by humans.
+func (i Interface) String() string {
+	return fmt.Sprintf("%s (index %d, MAC: %s)", i.Name, i.Index, i.MAC)
+}
+
 // ARPEntry is a representation of an ARP entry on the underlying system.
 type ARPEntry struct {
 	// IP is the IP address of the neighbour.
@@ -210,4 +215,9 @@ func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
 		done <- struct{}{}
 		return nil, ctx.Err()
 	}
+}
+
+// Interfaces returns a list of interfaces from the local system.
+func Interfaces() ([]*Interface, error) {
+	return accessor.Interfaces()
 }
