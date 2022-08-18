@@ -37,7 +37,7 @@ jobs:
 
     - name: Race Test
       run: |
-          go test -race ./...
+          sudo go test -race ./...
 
     - name: Coveralls
       if: ${{ matrix.go == '1.x' }}
