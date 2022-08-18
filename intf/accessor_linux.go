@@ -172,12 +172,10 @@ func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct{}
 					u.Type = ARPDelete
 				}
 
-				intf, err := interfaceByIndex(upd.Neigh.LinkIndex)
-				if err != nil {
-					// TODO(robjs): Determine what to do here, since this is an internal
-					// error from netlink. We can ignore it for the moment since it meant
-					// that an interface went away during our subscription.
-				}
+				// TODO(robjs): Determine what to do here, since this is an internal
+				// error from netlink. We can ignore it for the moment since it meant
+				// that an interface went away during our subscription.
+				intf, _ := interfaceByIndex(upd.Neigh.LinkIndex)
 				u.Neigh.Interface = intf
 				updates <- u
 			case <-done:
