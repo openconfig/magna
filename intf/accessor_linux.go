@@ -61,8 +61,8 @@ func interfaceByIndex(idx int) (*Interface, error) {
 	}
 	return &Interface{
 		Index: idx,
-		Name: link.Attrs().Name,
-		MAC: link.Attrs().HardwareAddr,
+		Name:  link.Attrs().Name,
+		MAC:   link.Attrs().HardwareAddr,
 	}, nil
 }
 
@@ -101,7 +101,7 @@ func (n netlinkAccessor) InterfaceAddIP(name string, addr *net.IPNet) error {
 // ARPSubscribe makes a subscription to the netlink ARP table and writes the results
 // that are returned to the updates channel as ARPUpdate messages. The done channel is
 // used to cancel the subscription which is spawned in a separate goroutine.
-func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct {}) error {
+func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error {
 	nlUpdates := make(chan netlink.NeighUpdate)
 
 	go func() {
@@ -111,9 +111,9 @@ func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct {
 				u := ARPUpdate{
 					Type: ARPUnknown,
 					Neigh: ARPEntry{
-						IP: upd.Neigh.IP,
-						MAC: upd.Neigh.HardwareAddr
-					}
+						IP:  upd.Neigh.IP,
+						MAC: upd.Neigh.HardwareAddr,
+					},
 				}
 				switch upd.Type {
 				case RTM_NEWNEIGH:
