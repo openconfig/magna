@@ -1,3 +1,4 @@
+// Package integration contains integration tests for the magna package.
 package integration
 
 import (
@@ -13,7 +14,7 @@ import (
 )
 
 var (
-	ifName = flag.String("interface", "eno1", "name of interface to use for dummy entries.")
+	ifName = flag.String("interface", "eth0", "name of interface to use for dummy entries.")
 )
 
 func TestNeighSubscribe(t *testing.T) {
