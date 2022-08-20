@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/openconfig/lemming/gnmi/gnmit"
+	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/ygot/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -167,6 +168,87 @@ func TestNew(t *testing.T) {
 			t.Logf("got results, %v", got)
 			if !testutil.NotificationSetEqual(got, tt.wantResults) {
 				t.Fatalf("did not get expected notification set, got: %v, want: %v", got, tt.wantResults)
+			}
+		})
+	}
+}
+
+func TestHint(t *testing.T) {
+	tests := []struct {
+		desc         string
+		inHints      []lwotg.Hint
+		wantHints    []lwotg.Hint
+		wantNotFound bool
+	}{{
+		desc: "single hint",
+		inHints: []lwotg.Hint{{
+			Group: "interfaces",
+			Key:   "eth0",
+			Value: "port-42",
+		}},
+		wantHints: []lwotg.Hint{{
+			Group: "interfaces",
+			Key:   "eth0",
+			Value: "port-42",
+		}},
+	}, {
+		desc: "multiple hints",
+		inHints: []lwotg.Hint{{
+			Group: "interfaces",
+			Key:   "eth0",
+			Value: "port-1",
+		}, {
+			Group: "interfaces",
+			Key:   "eth1",
+			Value: "port-2",
+		}},
+		wantHints: []lwotg.Hint{{
+			Group: "interfaces",
+			Key:   "eth0",
+			Value: "port-1",
+		}, {
+			Group: "interfaces",
+			Key:   "eth1",
+			Value: "port-2",
+		}},
+	}, {
+		desc: "no such hint",
+		wantHints: []lwotg.Hint{{
+			Group: "can't",
+			Key:   "find",
+			Value: "hint",
+		}},
+		wantNotFound: true,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			ch := make(chan lwotg.Hint, 10)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			s, err := New(ctx, "ate")
+			if err != nil {
+				t.Fatalf("cannot create server, err: %v", err)
+			}
+
+			s.SetHintChannel(ctx, ch)
+			for _, h := range tt.inHints {
+				ch <- h
+			}
+
+			// deflake otherwise our test has timing issues.
+			time.Sleep(100 * time.Millisecond)
+
+			for _, want := range tt.wantHints {
+				got, ok := s.GetHint(want.Group, want.Key)
+				switch {
+				case !ok && !tt.wantNotFound:
+					t.Fatalf("did not find expected hint %v", want)
+				case !ok && tt.wantNotFound:
+				case got != want.Value:
+					t.Fatalf("did not get expected hint value, got: %v, want: %v", got, want.Value)
+				}
 			}
 		})
 	}

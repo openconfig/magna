@@ -57,11 +57,13 @@ func New(ctx context.Context, hostname string) (*Server, error) {
 func (s *Server) SetHintChannel(ctx context.Context, ch chan lwotg.Hint) {
 	s.hintCh = ch
 	go func() {
-		select {
-		case h := <-s.hintCh:
-			s.SetHint(h.Group, h.Key, h.Value)
-		case <-ctx.Done():
-			return
+		for {
+			select {
+			case h := <-s.hintCh:
+				s.SetHint(h.Group, h.Key, h.Value)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 }
@@ -76,6 +78,20 @@ func (s *Server) SetHint(group, key, val string) {
 		s.hints[group] = map[string]string{}
 	}
 	s.hints[group][key] = val
+	return
+}
+
+// GetHint returns the value of the specified hint, it returns 'ok' as false if it is
+// not found.
+func (s *Server) GetHint(group, key string) (value string, ok bool) {
+	s.hintsMu.RLock()
+	defer s.hintsMu.RUnlock()
+
+	if _, gok := s.hints[group]; !gok {
+		return "", false
+	}
+
+	value, ok = s.hints[group][key]
 	return
 }
 
