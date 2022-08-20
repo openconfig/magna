@@ -1,0 +1,86 @@
+// Package lwotgtelem implements a gNMI server that serves OTG telemetry.
+package lwotgtelem
+
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"github.com/openconfig/lemming/gnmi/gnmit"
+	"github.com/openconfig/magna/lwotg"
+	"k8s.io/klog"
+)
+
+// Server contains the implementation of the gNMI server.
+type Server struct {
+	// c is the base gnmit Collector implementation that is used to store updates.
+	c *gnmit.Collector
+	// GNMIServer is the gNMI gRPC server instance that can be exposed externally.
+	GNMIServer *gnmit.GNMIServer
+
+	// hintCh is a channel that is used to write hints into the telemetry server
+	// Hints are used to allow data to be mapped to the OTG schema -- and may
+	// consist of elements of the OTG configuration, or mappings between underlying
+	// resources (e.g., physical interfaces) and the names they are referred to in
+	// OTG.
+	//
+	// Hints are defined in the lwotg package, and are <group, key, value>
+	// tuples.
+	hintCh chan lwotg.Hint
+
+	// hintsMu protects the hints map.
+	hintsMu sync.RWMutex
+	// hints is the set of Hints that have been received by the Server via the
+	// hint channel.
+	hints map[string]map[string]string
+}
+
+// New returns a new LWOTG gNMI server. The hostname is used to specify the hostname of the OTG server
+// that the server is acting for.
+func New(ctx context.Context, hostname string) (*Server, error) {
+	// defaultTasks is the set of tasks that should be run by default to populate telemetry values.
+	defaultTasks := []gnmit.Task{}
+
+	c, g, err := gnmit.NewServer(ctx, hostname, true, defaultTasks)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create gnmit server, %v", err)
+	}
+
+	return &Server{
+		c:          c,
+		GNMIServer: g,
+		hints:      map[string]map[string]string{},
+	}, nil
+}
+
+// SetHintChannel sets the channel that hints will be received by the telemetry server on.
+func (s *Server) SetHintChannel(ctx context.Context, ch chan lwotg.Hint) {
+	s.hintCh = ch
+	go func() {
+		select {
+		case h := <-s.hintCh:
+			s.SetHint(h.Group, h.Key, h.Value)
+		case <-ctx.Done():
+			return
+		}
+	}()
+}
+
+// SetHint stores the value of the hint specified in the server cache.
+func (s *Server) SetHint(group, key, val string) {
+	s.hintsMu.Lock()
+	defer s.hintsMu.Unlock()
+
+	klog.Infof("Setting hint %s:%s = %s", group, key, val)
+	if _, ok := s.hints[group]; !ok {
+		s.hints[group] = map[string]string{}
+	}
+	s.hints[group][key] = val
+	return
+}
+
+// AddTask adds the task t to the current tasks run by the gNMI server. It can be used to
+// register a new function that populates additional telemetry data.
+func (s *Server) AddTask(t gnmit.Task) error {
+	return s.GNMIServer.RegisterTask(t)
+}
