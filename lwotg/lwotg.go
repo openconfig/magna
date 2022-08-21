@@ -3,8 +3,13 @@ package lwotg
 
 import (
 	"context"
+	"net"
+	"sync"
 
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
+	"github.com/openconfig/magna/intf"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/klog"
 )
 
@@ -22,6 +27,12 @@ type Hint struct {
 	Value string
 }
 
+const (
+	// InterfaceHintGroupName is the name of the group that is used to
+	// handle interface details.
+	InterfaceHintGroupName string = "interface_map"
+)
+
 // Server implements the OTG ("Openapi") server.
 type Server struct {
 	*otg.UnimplementedOpenapiServer
@@ -37,8 +48,15 @@ type Server struct {
 	// other daemons are started).
 	protocolHandler func(*otg.Config, otg.ProtocolState_State_Enum) error
 
+	// chMu protects the configHandlers slice.
+	chMu sync.Mutex
+	// configHandlers is a slice of functions that are called when the SetConfig
+	// RPC is called. Each handles the configuration and returns an error if it
+	// finds one. It is possible that multiple handlers read the same configuration
+	// based on the registered handlers.
+	configHandlers []func(*otg.Config) error
+
 	// TODO(robjs): Add support for:
-	//   - functions that handle interface configuration.
 	//   - functions that handle protocol configuration.
 	//   - functions that handle flow configuration.
 	//   - functions that handle traffic generation.
@@ -49,7 +67,18 @@ type Server struct {
 
 // New returns a new lightweight OTG (LWOTG) server.
 func New() *Server {
-	return &Server{}
+	return &Server{
+		configHandlers: []func(*otg.Config) error{
+			s.baseInterfaceHandler,
+		},
+	}
+}
+
+// AddConfigHandler adds the specified fn to the set of config handlers.
+func (s *Server) AddConfigHandler(fn func(*otg.Config) error) {
+	s.chMu.Lock()
+	defer s.chMu.Unlock()
+	s.configHandlers = append(s.configHandlers, fn)
 }
 
 // SetHintChannel sets the hint channel to the specified channel.
@@ -73,4 +102,59 @@ func (s *Server) SetProtocolState(ctx context.Context, req *otg.SetProtocolState
 		}
 	}
 	return &otg.SetProtocolStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+}
+
+// SetConfig handles the SetConfig OTG RPC. In this implementation it calls the set
+// of configHandlers that have been registered with the server.
+func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg.SetConfigResponse, error) {
+	if req.Config == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid request configuration received, %v", req)
+	}
+
+	for _, fn := range s.configHandlers {
+		if err := fn(req.Config); err != nil {
+			return nil, err
+		}
+	}
+
+	s.cfg = req.Config
+
+	// TODO(robjs): remove this status 200 once OTG has been updated.
+	return &otg.SetConfigResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+}
+
+// baseInterfaceHandler is a built-in handler for interface configuration which is used as a configHandler.
+func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
+	intfs, err := portsToSystem(cfg.Ports, cfg.Devices)
+	if err != nil {
+		return err
+	}
+
+	if s.hintCh != nil {
+		for _, i := range intfs {
+			h := Hint{
+				Group: InterfaceHintGroupName,
+				Key:   i.SystemName,
+				Value: i.OTGEthernetName,
+			}
+			select {
+			case s.hintCh <- h:
+			default:
+				// Non-blocking if the channel is full.
+			}
+		}
+	}
+
+	for _, i := range intfs {
+		for _, a := range i.IPv4 {
+			n := &net.IPNet{
+				IP:   a.Address,
+				Mask: net.CIDRMask(a.Mask, 32),
+			}
+			klog.Infof("Configuring interface %s with address %s", i.SystemName, n)
+			if err := intf.AddIP(i.SystemName, a); err != nil {
+				return status.Errorf(codes.Internal, "cannot configure address %s on interface %s, err: %v", n, i.SystemName, error)
+			}
+		}
+	}
 }
