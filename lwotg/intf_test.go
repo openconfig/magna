@@ -15,7 +15,7 @@ func TestPortsToSystem(t *testing.T) {
 		desc      string
 		inPorts   []*otg.Port
 		inDevices []*otg.Device
-		wantIntf  []*intf
+		wantIntf  []*otgIntf
 		wantErr   bool
 	}{{
 		desc: "interface with no location",
@@ -58,7 +58,7 @@ func TestPortsToSystem(t *testing.T) {
 				PortName: proto.String("port0"),
 			}},
 		}},
-		wantIntf: []*intf{{
+		wantIntf: []*otgIntf{{
 			OTGEthernetName: "port0ETH",
 			OTGPortName:     "port0",
 			SystemName:      "eth0",
@@ -80,7 +80,7 @@ func TestPortsToSystem(t *testing.T) {
 				}},
 			}},
 		}},
-		wantIntf: []*intf{{
+		wantIntf: []*otgIntf{{
 			OTGEthernetName: "port0ETH",
 			OTGPortName:     "port0",
 			SystemName:      "eth0",
@@ -122,7 +122,7 @@ func TestPortsToSystem(t *testing.T) {
 				}},
 			}},
 		}},
-		wantIntf: []*intf{{
+		wantIntf: []*otgIntf{{
 			OTGEthernetName: "port0ETH",
 			OTGPortName:     "port0",
 			SystemName:      "eth0",

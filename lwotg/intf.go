@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// intf describes an interface in the OTG configuration.
-type intf struct {
+// otgIntf describes an interface in the OTG configuration.
+type otgIntf struct {
 	// OTGEthernetName specifies the name of the interface in the OTG configuration when referred to
 	// as an Ethernet port.
 	OTGEthernetName string
@@ -40,8 +40,8 @@ type ipAddress struct {
 // underlying system. OTG devices have a set of ethernet ports that are associated with them, which
 // use the names that are specified in the ports map.
 //
-// It returns a slice of intf structs that describe the system interfaces.
-func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*intf, error) {
+// It returns a slice of otgIntf structs that describe the system interfaces.
+func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*otgIntf, error) {
 	physIntf := map[string]string{}
 	for _, p := range ports {
 		if p.Location == nil {
@@ -50,7 +50,7 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*intf, error) {
 		physIntf[p.Name] = *p.Location
 	}
 
-	intfs := []*intf{}
+	intfs := []*otgIntf{}
 	for _, d := range devices {
 		for _, e := range d.Ethernets {
 			if e.GetPortName() == "" {
@@ -61,7 +61,7 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*intf, error) {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid port name for Ethernet %s, does not map to a physical interface", *e.PortName)
 			}
 
-			i := &intf{
+			i := &otgIntf{
 				OTGEthernetName: e.Name,
 				OTGPortName:     *e.PortName,
 				SystemName:      sysInt,

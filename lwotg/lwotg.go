@@ -67,11 +67,12 @@ type Server struct {
 
 // New returns a new lightweight OTG (LWOTG) server.
 func New() *Server {
-	return &Server{
-		configHandlers: []func(*otg.Config) error{
-			s.baseInterfaceHandler,
-		},
+	s := &Server{
+		configHandlers: []func(*otg.Config) error{},
 	}
+
+	s.AddConfigHandler(s.baseInterfaceHandler)
+	return s
 }
 
 // AddConfigHandler adds the specified fn to the set of config handlers.
@@ -152,9 +153,10 @@ func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
 				Mask: net.CIDRMask(a.Mask, 32),
 			}
 			klog.Infof("Configuring interface %s with address %s", i.SystemName, n)
-			if err := intf.AddIP(i.SystemName, a); err != nil {
-				return status.Errorf(codes.Internal, "cannot configure address %s on interface %s, err: %v", n, i.SystemName, error)
+			if err := intf.AddIP(i.SystemName, n); err != nil {
+				return status.Errorf(codes.Internal, "cannot configure address %s on interface %s, err: %v", n, i.SystemName, err)
 			}
 		}
 	}
+	return nil
 }
