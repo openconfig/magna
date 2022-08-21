@@ -38,7 +38,7 @@ func TestNew(t *testing.T) {
 		inHostname: "ate",
 		inPaths:    []*gpb.Path{{Elem: []*gpb.PathElem{{Name: "hello"}}}},
 		inTask: []gnmit.Task{
-			gnmit.Task{
+			{
 				Run: func(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, _ func()) error {
 					if err := updateFn(&gpb.Notification{
 						Timestamp: 42,
