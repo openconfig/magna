@@ -16,6 +16,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/open-traffic-generator/snappi/gosnappi v0.8.8 // indirect
 	github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8 // indirect
 	github.com/openconfig/goyang v1.1.0 // indirect
 	github.com/openconfig/gribi v0.1.1-0.20220126144445-1634932f9fd8 // indirect
