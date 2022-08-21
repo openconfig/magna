@@ -78,7 +78,6 @@ func (s *Server) SetHint(group, key, val string) {
 		s.hints[group] = map[string]string{}
 	}
 	s.hints[group][key] = val
-	return
 }
 
 // GetHint returns the value of the specified hint, it returns 'ok' as false if it is
