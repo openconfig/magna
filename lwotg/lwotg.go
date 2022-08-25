@@ -56,13 +56,30 @@ type Server struct {
 	// based on the registered handlers.
 	configHandlers []func(*otg.Config) error
 
+	// fhMu protects the flowHandlers slice.
+	fhMu sync.Mutex
+	// flowHandlers is the a slice of functions that are called when the SetConfig
+	// RPC is called which specifically handle flows. Each function is a FlowGeneratorFn
+	// and is sequentially called to determine whether it can handle the flow.
+	flowHandlers []FlowGeneratorFn
+
 	// TODO(robjs): Add support for:
 	//   - functions that handle protocol configuration.
-	//   - functions that handle flow configuration.
 	//   - functions that handle traffic generation.
 
 	// cfg is a cache of the current OTG configuration.
 	cfg *otg.Config
+
+	// intMu protects the intfCache.
+	intfMu sync.Mutex
+	// intfCache is a cache of the current set of interfaces for the OTG configuration.
+	intfCache []*otgIntf
+
+	// tgMu protects the trafficGenFns slice.
+	tgMu sync.Mutex
+	// trafficGenerators are the set of functions that will be called when the OTG server
+	// is requested to start generating traffic.
+	trafficGenerators []TXRXFn
 }
 
 // New returns a new lightweight OTG (LWOTG) server.
@@ -118,10 +135,31 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 		}
 	}
 
+	flowMethods, err := s.handleFlows(req.GetConfig().GetFlows())
+	if err != nil {
+		return nil, err
+	}
+	s.setTrafficGenFns(flowMethods)
+
+	// Cache the configuration.
 	s.cfg = req.Config
 
 	// TODO(robjs): remove this status 200 once OTG has been updated.
 	return &otg.SetConfigResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+}
+
+func (s *Server) setTrafficGenFns(fns []TXRXFn) {
+	s.tgMu.Lock()
+	defer s.tgMu.Unlock()
+	s.trafficGenerators = fns
+}
+
+// interfaces returns a copy of the cached set of interfaces in the server.
+func (s *Server) interfaces() []*otgIntf {
+	s.intfMu.Lock()
+	defer s.intfMu.Unlock()
+
+	return append([]*otgIntf{}, s.intfCache...)
 }
 
 // baseInterfaceHandler is a built-in handler for interface configuration which is used as a configHandler.
@@ -130,6 +168,9 @@ func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
 	if err != nil {
 		return err
 	}
+
+	// Stash the current set of interfaces as these are used by other callers.
+	s.intfCache = intfs
 
 	if s.hintCh != nil {
 		for _, i := range intfs {
@@ -158,5 +199,6 @@ func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
 			}
 		}
 	}
+
 	return nil
 }
