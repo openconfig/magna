@@ -1,3 +1,7 @@
+// Package mpls parses OTG flow descriptions that consist of
+// MPLS packets and returns functions that can generate and receive
+// packets for these flows. These can be used with the LWOTG
+// implementation.
 package mpls
 
 import (
