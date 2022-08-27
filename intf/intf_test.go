@@ -15,10 +15,22 @@
 package intf
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
+
+func mustParseMAC(t *testing.T, mac string) net.HardwareAddr {
+	m, err := net.ParseMAC(mac)
+	if err != nil {
+		t.Fatalf("invalid MAC address %s supplied", mac)
+	}
+	return m
+}
 
 type validInterfaceAccessor struct {
 	unimplementedAccessor
@@ -131,6 +143,107 @@ func TestAddIP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := accessor.AddInterfaceIP(tt.inInterface, tt.inAddress); (err != nil) != tt.wantErr {
 				t.Fatalf("AddInterface(%s, %s): did not get expected error, got: %v, wantErr? %v", tt.inInterface, tt.inAddress, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+type awaitARPAccessor struct {
+	unimplementedAccessor
+}
+
+func (a *awaitARPAccessor) ARPList() ([]*ARPEntry, error) {
+	m, err := net.ParseMAC("01:01:01:01:01:01")
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse MAC, %v", err)
+	}
+	return []*ARPEntry{{
+		IP:        net.ParseIP("192.0.2.1"),
+		Interface: &Interface{Name: "eth0"},
+		MAC:       m,
+	}}, nil
+}
+
+func (a *awaitARPAccessor) ARPSubscribe(upch chan ARPUpdate, done chan struct{}) error {
+	if upch == nil || done == nil {
+		return fmt.Errorf("unspecified channels")
+	}
+
+	macs := []net.HardwareAddr{}
+	for _, m := range []string{"02:02:02:02:02:02", "03:03:03:03:03:03"} {
+		mac, err := net.ParseMAC(m)
+		if err != nil {
+			return fmt.Errorf("cannot parse MAC %s, test error", m)
+		}
+		macs = append(macs, mac)
+	}
+
+	updates := []ARPUpdate{{
+		Type: ARPDelete,
+		Neigh: ARPEntry{
+			IP:        net.ParseIP("192.0.2.2"),
+			Interface: &Interface{Name: "eth0"},
+			MAC:       macs[0],
+		},
+	}, {
+		Type: ARPAdd,
+		Neigh: ARPEntry{
+			IP:        net.ParseIP("192.0.2.3"),
+			Interface: &Interface{Name: "eth1"},
+			MAC:       macs[1],
+		},
+	}}
+
+	for _, u := range updates {
+		time.Sleep(100 * time.Millisecond)
+		upch <- u
+	}
+
+	go func() {
+		<-done
+	}()
+	return nil
+}
+
+func TestAwaitARP(t *testing.T) {
+	oldAccessor := accessor
+	defer func() {
+		accessor = oldAccessor
+	}()
+	accessor = &awaitARPAccessor{}
+
+	tests := []struct {
+		desc      string
+		inAddr    net.IP
+		inTimeout time.Duration
+		wantMAC   net.HardwareAddr
+		wantErr   bool
+	}{{
+		desc:    "MAC resolved by list",
+		inAddr:  net.ParseIP("192.0.2.1"),
+		wantMAC: mustParseMAC(t, "01:01:01:01:01:01"),
+	}, {
+		desc:    "awaited MAC",
+		inAddr:  net.ParseIP("192.0.2.3"),
+		wantMAC: mustParseMAC(t, "03:03:03:03:03:03"),
+	}, {
+		desc:    "cannot be resolved",
+		inAddr:  net.ParseIP("192.0.2.254"),
+		wantErr: true,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			got, err := AwaitARP(ctx, tt.inAddr)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("did not get expected error status, got: %v, wantErr? %v", err, tt.wantErr)
+			}
+
+			if !cmp.Equal(got, tt.wantMAC) {
+				t.Fatalf("did not get expected MAC, got: %s, want: %s", got, tt.wantMAC)
 			}
 		})
 	}

@@ -20,6 +20,7 @@
 package intf
 
 import (
+	"context"
 	"fmt"
 	"net"
 )
@@ -35,12 +36,17 @@ type Interface struct {
 	MAC net.HardwareAddr
 }
 
+// String is the string representation of an interface that can be read by humans.
+func (i Interface) String() string {
+	return fmt.Sprintf("%s (index %d, MAC: %s)", i.Name, i.Index, i.MAC)
+}
+
 // ARPEntry is a representation of an ARP entry on the underlying system.
 type ARPEntry struct {
 	// IP is the IP address of the neighbour.
 	IP net.IP
 	// Interface is the name of the interface on which the ARP entry was learnt.
-	Interface string
+	Interface *Interface
 	// MAC is the MAC address of the neighbour.
 	MAC net.HardwareAddr
 }
@@ -61,7 +67,7 @@ const (
 type ARPUpdate struct {
 	// Type indicates whether the event was an add or delete.
 	Type ARPEvent
-	// Neigh is the neighbour that the change corresponds to
+	// Neigh is the neighbour that the change corresponds to.
 	Neigh ARPEntry
 }
 
@@ -81,7 +87,10 @@ type NetworkAccessor interface {
 	// ARPList lists the set of ARP neighbours on the system.
 	ARPList() ([]*ARPEntry, error)
 	// ARPSubscribe writes changes to the ARP table to the channel updates, and uses
-	// done to indicate that the subscription is complete.
+	// done to indicate that the subscription is complete. The ARPSubscribe function
+	// should not be blocking and rather return once it has started a separate goroutine
+	// that writes updates to the updates channel, and can be cancelled by sending a
+	// message to the done channel.
 	ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error
 }
 
@@ -123,6 +132,11 @@ func (u unimplementedAccessor) ARPSubscribe(_ chan ARPUpdate, _ chan struct{}) e
 // should be set by init() [which may be a platform-specific initiation].
 var accessor NetworkAccessor
 
+// InterfaceByName returns an interface's attributes  by the name of the interface.
+func InterfaceByName(name string) (*Interface, error) {
+	return accessor.Interface(name)
+}
+
 // ValidInterface determines whether the interface name is valid for the
 // current system.
 func ValidInterface(name string) bool {
@@ -153,4 +167,56 @@ func AddIP(intf string, addr *net.IPNet) error {
 		return fmt.Errorf("cannot add address, %v", err)
 	}
 	return nil
+}
+
+// AwaitARP waits for the IPv4 address addr to be resolved via ARP. It uses the supplied
+// context to determine whether it should continue awaiting the entry. If the ARP entry
+// is resolved, it is returned directly.
+func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
+	neighs, err := accessor.ARPList()
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve list of ARP entries, %v", err)
+	}
+
+	for _, n := range neighs {
+		if addr.Equal(n.IP) {
+			return n.MAC, nil
+		}
+	}
+
+	updates := make(chan ARPUpdate, 1)
+	result := make(chan ARPUpdate, 1)
+
+	go func() {
+		for {
+			upd := <-updates
+			if upd.Type == ARPAdd {
+				if addr.Equal(upd.Neigh.IP) {
+					result <- upd
+					// We only care about the first ARP update, so return
+					// when we have received an initial update.
+					return
+				}
+			}
+		}
+	}()
+
+	done := make(chan struct{})
+	if err := accessor.ARPSubscribe(updates, done); err != nil {
+		return nil, fmt.Errorf("cannot subscribe to ARP updates, err: %v", err)
+	}
+
+	select {
+	case n := <-result:
+		done <- struct{}{}
+		return n.Neigh.MAC, nil
+	case <-ctx.Done():
+		done <- struct{}{}
+		return nil, ctx.Err()
+	}
+}
+
+// Interfaces returns a list of interfaces from the local system.
+func Interfaces() ([]*Interface, error) {
+	return accessor.Interfaces()
 }
