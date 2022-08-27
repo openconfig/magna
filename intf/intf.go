@@ -67,7 +67,7 @@ const (
 type ARPUpdate struct {
 	// Type indicates whether the event was an add or delete.
 	Type ARPEvent
-	// Neigh is the neighbour that the change corresponds to
+	// Neigh is the neighbour that the change corresponds to.
 	Neigh ARPEntry
 }
 
@@ -76,13 +76,13 @@ type ARPUpdate struct {
 // to use the functions within this package whilst using a different underlying
 // implementation (e.g., netlink on Linux to access the kernel).
 type NetworkAccessor interface {
-	// Links returns a set of links that are present on the local system.
+	// Interfaces returns a set of interfaces that are present on the local system.
 	Interfaces() ([]*Interface, error)
-	// Link retrieves the link with the specified name.
+	// Interface retrieves the interface with the specified name.
 	Interface(name string) (*Interface, error)
-	// AddressList lists the IP addresses configured on a particular interface.
+	// InterfaceAdddresses lists the IP addresses configured on a particular interface.
 	InterfaceAddresses(name string) ([]*net.IPNet, error)
-	// AddressAdd adds address ip to the interface name.
+	// AddInterfaceIP adds address ip to the interface name.
 	AddInterfaceIP(name string, ip *net.IPNet) error
 	// ARPList lists the set of ARP neighbours on the system.
 	ARPList() ([]*ARPEntry, error)
@@ -186,23 +186,22 @@ func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
 
 	updates := make(chan ARPUpdate, 1)
 	result := make(chan ARPUpdate, 1)
-	done := make(chan struct{})
 
-	go func(updates chan ARPUpdate, done chan struct{}) {
+	go func() {
 		for {
-			select {
-			case upd := <-updates:
-				if upd.Type == ARPAdd {
-					if addr.Equal(upd.Neigh.IP) {
-						result <- upd
-					}
+			upd := <-updates
+			if upd.Type == ARPAdd {
+				if addr.Equal(upd.Neigh.IP) {
+					result <- upd
+					// We only care about the first ARP update, so return
+					// when we have received an initial update.
+					return
 				}
-			case <-done:
-				return
 			}
 		}
-	}(updates, done)
+	}()
 
+	done := make(chan struct{})
 	if err := accessor.ARPSubscribe(updates, done); err != nil {
 		return nil, fmt.Errorf("cannot subscribe to ARP updates, err: %v", err)
 	}
