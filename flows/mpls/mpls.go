@@ -7,16 +7,10 @@ package mpls
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
-)
-
-var (
-	// timeout specifies how long to wait for a PCAP handle.
-	timeout = 30 * time.Second
 )
 
 const (
