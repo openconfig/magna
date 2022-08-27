@@ -1,3 +1,12 @@
+// Binary magna instantiates an OTG server, with accompanying gNMI server, that can be
+// extended to support traffic generation functions described by OTG.
+//
+// The lwotg package is used as a base which provides simple interface configuration only,
+// for new functions that are required additional handlers can be loaded into the server.
+// Particularly:
+//   - New ConfigHandlers can be added to cover more OTG functionality.
+//   - New FlowHandlers can be added to add support for generating more flows. The
+//     implementation included here supports only basic MPLS traffic generation.
 package main
 
 import (
