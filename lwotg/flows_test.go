@@ -33,7 +33,7 @@ func TestHandleFlows(t *testing.T) {
 			Name: "handled",
 		}},
 		inFns: []FlowGeneratorFn{
-			func(_ *otg.Flow, _ []*otgIntf) (TXRXFn, bool, error) {
+			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
 				return func(tx, rx *FlowController) {}, true, nil
 			},
 		},
@@ -46,7 +46,7 @@ func TestHandleFlows(t *testing.T) {
 			Name: "handled-2",
 		}},
 		inFns: []FlowGeneratorFn{
-			func(_ *otg.Flow, _ []*otgIntf) (TXRXFn, bool, error) {
+			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
 				return func(tx, rx *FlowController) {}, true, nil
 			},
 		},
@@ -57,7 +57,7 @@ func TestHandleFlows(t *testing.T) {
 			Name: "error",
 		}},
 		inFns: []FlowGeneratorFn{
-			func(_ *otg.Flow, _ []*otgIntf) (TXRXFn, bool, error) {
+			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
 				return nil, true, fmt.Errorf("unhandled")
 			},
 		},

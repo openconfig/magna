@@ -72,7 +72,7 @@ type Server struct {
 	// intMu protects the intfCache.
 	intfMu sync.Mutex
 	// intfCache is a cache of the current set of interfaces for the OTG configuration.
-	intfCache []*otgIntf
+	intfCache []*OTGIntf
 
 	// tgMu protects the trafficGenerators and generatorChs slices.
 	tgMu sync.Mutex
@@ -176,11 +176,11 @@ func (s *Server) SetTransmitState(ctx context.Context, req *otg.SetTransmitState
 }
 
 // interfaces returns a copy of the cached set of interfaces in the server.
-func (s *Server) interfaces() []*otgIntf {
+func (s *Server) interfaces() []*OTGIntf {
 	s.intfMu.Lock()
 	defer s.intfMu.Unlock()
 
-	return append([]*otgIntf{}, s.intfCache...)
+	return append([]*OTGIntf{}, s.intfCache...)
 }
 
 // baseInterfaceHandler is a built-in handler for interface configuration which is used as a configHandler.
