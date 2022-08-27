@@ -10,9 +10,7 @@ import (
 )
 
 func TestHandleFlows(t *testing.T) {
-	dummyFn := func(_, _ *FlowController) {
-		return
-	}
+	dummyFn := func(_, _ *FlowController) {}
 
 	tests := []struct {
 		desc        string
