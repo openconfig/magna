@@ -158,6 +158,23 @@ func (s *Server) setTrafficGenFns(fns []TXRXFn) {
 	s.trafficGenerators = fns
 }
 
+// SetTransmitState implements the SetTransmitState Openapi/OTG RPC.
+func (s *Server) SetTransmitState(ctx context.Context, req *otg.SetTransmitStateRequest) (*otg.SetTransmitStateResponse, error) {
+	klog.Infof("SetTransmitState(%v) called", req)
+
+	switch req.GetTransmitState().GetState() {
+	case otg.TransmitState_State_start:
+		s.startTraffic()
+	case otg.TransmitState_State_stop:
+		s.stopTraffic()
+	default:
+		return nil, status.Errorf(codes.Unimplemented, "states other than starts and stop unimplemented, got: %s", req.GetTransmitState().GetState())
+	}
+
+	// TODO(robjs): once OTG is updated, remove the StatusCode_200 field.
+	return &otg.SetTransmitStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+}
+
 // interfaces returns a copy of the cached set of interfaces in the server.
 func (s *Server) interfaces() []*otgIntf {
 	s.intfMu.Lock()
