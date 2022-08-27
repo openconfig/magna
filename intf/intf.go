@@ -67,7 +67,7 @@ const (
 type ARPUpdate struct {
 	// Type indicates whether the event was an add or delete.
 	Type ARPEvent
-	// Neigh is the neighbour that the change corresponds to
+	// Neigh is the neighbour that the change corresponds to.
 	Neigh ARPEntry
 }
 
@@ -186,23 +186,22 @@ func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
 
 	updates := make(chan ARPUpdate, 1)
 	result := make(chan ARPUpdate, 1)
-	done := make(chan struct{})
 
-	go func(updates chan ARPUpdate, done chan struct{}) {
+	go func() {
 		for {
-			select {
-			case upd := <-updates:
-				if upd.Type == ARPAdd {
-					if addr.Equal(upd.Neigh.IP) {
-						result <- upd
-					}
+			upd := <-updates
+			if upd.Type == ARPAdd {
+				if addr.Equal(upd.Neigh.IP) {
+					result <- upd
+					// We only care about the first ARP update, so return
+					// when we have received an initial update.
+					return
 				}
-			case <-done:
-				return
 			}
 		}
-	}(updates, done)
+	}()
 
+	done := make(chan struct{})
 	if err := accessor.ARPSubscribe(updates, done); err != nil {
 		return nil, fmt.Errorf("cannot subscribe to ARP updates, err: %v", err)
 	}
