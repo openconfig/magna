@@ -65,7 +65,6 @@ type Server struct {
 
 	// TODO(robjs): Add support for:
 	//   - functions that handle protocol configuration.
-	//   - functions that handle traffic generation.
 
 	// cfg is a cache of the current OTG configuration.
 	cfg *otg.Config
@@ -75,11 +74,13 @@ type Server struct {
 	// intfCache is a cache of the current set of interfaces for the OTG configuration.
 	intfCache []*otgIntf
 
-	// tgMu protects the trafficGenFns slice.
+	// tgMu protects the trafficGenerators and generatorChs slices.
 	tgMu sync.Mutex
 	// trafficGenerators are the set of functions that will be called when the OTG server
 	// is requested to start generating traffic.
 	trafficGenerators []TXRXFn
+	// generatorChs are the channels to communicate with the traffic generation functions.
+	generatorChs []*FlowController
 }
 
 // New returns a new lightweight OTG (LWOTG) server.
@@ -88,6 +89,7 @@ func New() *Server {
 		configHandlers: []func(*otg.Config) error{},
 	}
 
+	// Always run the baseInterfaceHandler built-in function.
 	s.AddConfigHandler(s.baseInterfaceHandler)
 	return s
 }
@@ -148,6 +150,8 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 	return &otg.SetConfigResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
 }
 
+// setTrafficGenFns sets the functions that will be used to generate traffic
+// for the flows within the configuration.
 func (s *Server) setTrafficGenFns(fns []TXRXFn) {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()

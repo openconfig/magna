@@ -5,8 +5,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
-
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 // TXRXFn is a function that handles the send and receive of packets for a particular flow.
@@ -22,10 +20,13 @@ type FlowController struct {
 	// Stop is a channel used to indicate that the function that has been called should
 	// cease to send or receive packets.
 	Stop chan struct{}
-	// GNMI is a channel via which telemetry updates can be written by the flow.
-	GNMI chan *gpb.Update
-	// Err is used for the flow function to report errors.
-	Err chan error
+}
+
+// NewFlowController returns an initialised FlowController.
+func NewFlowController() *FlowController {
+	return &FlowController{
+		Stop: make(chan struct{}),
+	}
 }
 
 // FlowGeneratorFn is a function that takes an input OTG Flow and, if it is able to, returns
@@ -83,4 +84,29 @@ func (s *Server) handleFlows(flows []*otg.Flow) ([]TXRXFn, error) {
 		}
 	}
 	return flowMethods, nil
+}
+
+// startTraffic triggers traffic generation for the defined sets of flows.
+func (s *Server) startTraffic() {
+	s.tgMu.Lock()
+	defer s.tgMu.Unlock()
+
+	s.generatorChs = []*FlowController{}
+	klog.Infof("starting traffic...")
+	for _, fn := range s.trafficGenerators {
+		tx, rx := NewFlowController(), NewFlowController()
+		go fn(tx, rx)
+		s.generatorChs = append(s.generatorChs, []*FlowController{tx, rx}...)
+		klog.Infof("started listener number %d", len(s.generatorChs))
+	}
+}
+
+// stopTraffic stops the running generator functions.
+func (s *Server) stopTraffic() {
+	s.tgMu.Lock()
+	defer s.tgMu.Unlock()
+
+	for _, c := range s.generatorChs {
+		c.Stop <- struct{}{}
+	}
 }
