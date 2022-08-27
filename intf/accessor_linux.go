@@ -42,7 +42,7 @@ type netlinkAccessor struct {
 func (n netlinkAccessor) Interface(name string) (*Interface, error) {
 	link, err := netlink.LinkByName(name)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get interface, %v", err)
+		return nil, fmt.Errorf("cannot get interface %s, %v", name, err)
 	}
 
 	attrs := link.Attrs()
