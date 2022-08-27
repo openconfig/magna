@@ -5,8 +5,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
-
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 // TXRXFn is a function that handles the send and receive of packets for a particular flow.
@@ -22,10 +20,6 @@ type FlowController struct {
 	// Stop is a channel used to indicate that the function that has been called should
 	// cease to send or receive packets.
 	Stop chan struct{}
-	// GNMI is a channel via which telemetry updates can be written by the flow.
-	GNMI chan *gpb.Update
-	// Err is used for the flow function to report errors.
-	Err chan error
 }
 
 // FlowGeneratorFn is a function that takes an input OTG Flow and, if it is able to, returns
