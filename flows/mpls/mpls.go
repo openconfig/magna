@@ -31,7 +31,7 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 		switch t := layer.GetChoice(); t {
 		case otg.FlowHeader_Choice_ethernet:
 			if ethernet != nil {
-				return nil, fmt.Errorf("multiple Ethernet layers not handled by MPLS plugin.")
+				return nil, fmt.Errorf("multiple Ethernet layers not handled by MPLS plugin")
 			}
 			ethernet = layer
 		case otg.FlowHeader_Choice_mpls:
@@ -86,7 +86,7 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 		case otg.PatternFlowMplsTimeToLive_Choice_unspecified:
 			ttl = defaultMPLSTTL
 		default:
-			return nil, fmt.Errorf("simple MPLS does not handle TTLs that are not explicitly set.")
+			return nil, fmt.Errorf("simple MPLS does not handle TTLs that are not explicitly set")
 		}
 
 		ll := &layers.MPLS{
