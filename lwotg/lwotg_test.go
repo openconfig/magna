@@ -75,7 +75,7 @@ func TestSetProtocols(t *testing.T) {
 			go s.Serve(l)
 			t.Cleanup(s.Stop)
 
-			conn, err := grpc.Dial(l.Addr().String(), grpc.WithInsecure())
+			conn, err := grpc.Dial(l.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("cannot dial server %s, err: %v", l.Addr().String(), err)
 			}
