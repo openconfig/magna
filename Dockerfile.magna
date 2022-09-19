@@ -1,5 +1,5 @@
 # Development image.
-FROM golang:1.18-alpine AS builder
+FROM golang:1.19-alpine AS builder
 RUN apk add libpcap-dev libpcap
 RUN apk add build-base
 RUN apk add zsh
@@ -8,7 +8,7 @@ RUN apk add zsh
 RUN mkdir -p /go/src/github.com/openconfig/magna
 COPY . /go/src/github.com/openconfig/magna
 WORKDIR /go/src/github.com/openconfig/magna/cmd/magna
-RUN go build
+RUN GOOS=linux go build
 
 # Run second stage for the container that we actually run.
 FROM alpine:latest

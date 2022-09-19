@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/vishvananda/netlink"
+	"k8s.io/klog"
 )
 
 const (
@@ -35,6 +36,7 @@ func init() {
 	// TODO(robjs): Consider whether we should use build tags vs. solely
 	// the underlying system, since this would allow a build tag to say
 	// that the package should use gRPC wire.
+	klog.Infof("Initialising with Linux profile.")
 	accessor = netlinkAccessor{}
 }
 
@@ -113,8 +115,8 @@ func (n netlinkAccessor) InterfaceAddresses(name string) ([]*net.IPNet, error) {
 	return nets, nil
 }
 
-// InterfaceAddIP adds the address addr to the interface name using netlink.
-func (n netlinkAccessor) InterfaceAddIP(name string, addr *net.IPNet) error {
+// AddInterfaceIP adds the address addr to the interface name using netlink.
+func (n netlinkAccessor) AddInterfaceIP(name string, addr *net.IPNet) error {
 	link, err := netlink.LinkByName(name)
 	if err != nil {
 		return fmt.Errorf("cannot get interface, %v", err)

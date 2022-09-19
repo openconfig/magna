@@ -1,5 +1,6 @@
-<<<<<<< HEAD
-// Package lwotg implements a lightweight, extensible OTG implementation.
+// Package lwotg implements a lightweight, extensible OpenTrafficGenerator
+// (github.com/open-traffic-generator) implementation. OpenTrafficGenerator is
+// often abbreviated to OTG.
 package lwotg
 
 import (
@@ -14,31 +15,19 @@ import (
 	"k8s.io/klog"
 )
 
-=======
-// Package lwotg implements a lightweight, extensible OpenTrafficGenerator
-// (github.com/open-traffic-generator) implementation. OpenTrafficGenerator is
-// often abbreviated to OTG.
-package lwotg
-
->>>>>>> main
 // Hint is <group, key, value> tuple that can be handed to modules of the
 // OTG implementation to perform their functions. For example, it may be
 // used to communicate mappings between system interfaces and the names that
 // are used in OTG for them.
 type Hint struct {
 	// Group is a string used to specify a name for a set of hints that
-<<<<<<< HEAD
-	// are associated one one another.
-=======
 	// are associated with one another.
->>>>>>> main
 	Group string
 	// Key is the name of the hint.
 	Key string
 	// Value is the value stored for the hint.
 	Value string
 }
-<<<<<<< HEAD
 
 const (
 	// InterfaceHintGroupName is the name of the group that is used to
@@ -236,5 +225,3 @@ func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
 
 	return nil
 }
-=======
->>>>>>> main
