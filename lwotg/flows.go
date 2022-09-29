@@ -45,6 +45,21 @@ type FlowGeneratorFn func(*otg.Flow, []*otgIntf) (TXRXFn, bool, error)
 
 // AddFlowHandlers adds the set of flow generator functions specified to the flow handlers that
 // are considered as candidates by the server.
+//
+// Flows that are to be mapped to a generator function are run sequentially through the
+// provided FlowGeneratorFn - once a flow is handled, it is no longer handed to any
+// further handler function. Thus, the order that the flow handler functions are provided
+// to AddFlowHandlers matters.
+//
+// For example, if AddFlowHandlers(a, b) is called - if 'a' matches the flow, regardless of
+// whether 'b' could handle it, the TXRXFn returned by 'a' is used. The order is maintained
+// across multiple calls to AddFlowHandlers - i.e., AddFlowHandlers(a,b) followed by
+// AddFlowHandlers(c,d) results in the flow being handed sequentially to a, b, c, d until
+// a function that can handle it is found.
+//
+// TODO(robjs): Consider whethere should be, in the future, some idea of precedence of
+// handler functions to deal with the idea that there are 'default' flow handlers to
+// cover common flow types.
 func (s *Server) AddFlowHandlers(fns ...FlowGeneratorFn) {
 	s.fhMu.Lock()
 	defer s.fhMu.Unlock()
