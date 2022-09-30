@@ -1,6 +1,6 @@
 // Package lwotg implements a lightweight, extensible OpenTrafficGenerator
 // (github.com/open-traffic-generator) implementation. OpenTrafficGenerator is
-  // often abbreviated to OTG.
+// often abbreviated to OTG.
 package lwotg
 
 import (
