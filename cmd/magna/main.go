@@ -74,12 +74,12 @@ func main() {
 
 	otgLis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		klog.Exitf("cannot listen on port %d, err: %v", port, err)
+		klog.Exitf("cannot listen on port %s, err: %v", port, err)
 	}
 
 	gnmiLis, err := net.Listen("tcp", fmt.Sprintf(":%s", telemPort))
 	if err != nil {
-		klog.Exitf("cannot listen on port %d, err: %v", telemPort, err)
+		klog.Exitf("cannot listen on port %s, err: %v", telemPort, err)
 	}
 
 	otgS := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
