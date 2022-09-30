@@ -101,7 +101,7 @@ func main() {
 	go gnmiS.Serve(gnmiLis)
 
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, os.Interrupt)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	sig := <-sigs
 	klog.Infof("Received signal %v", sig)
 	os.Exit(1)
