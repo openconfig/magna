@@ -27,7 +27,7 @@ jobs:
 
     - name: Get non-Go dependencies
       run: |
-        sudo apt-get install libpcap libpcap-dev
+        sudo apt-get install libpcap-dev
 
     - name: Get dependencies
       run: |
