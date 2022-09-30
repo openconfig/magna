@@ -131,7 +131,6 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				for {
 					updateFn(<-gnmiCh)
 				}
-				return
 			}()
 			return nil
 		},
