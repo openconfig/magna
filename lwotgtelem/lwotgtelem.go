@@ -11,6 +11,8 @@ import (
 	"k8s.io/klog"
 )
 
+type HintMap map[string]map[string]string
+
 // Server contains the implementation of the gNMI server.
 type Server struct {
 	// c is the base gnmit Collector implementation that is used to store updates.
@@ -32,7 +34,7 @@ type Server struct {
 	hintsMu sync.RWMutex
 	// hints is the set of Hints that have been received by the Server via the
 	// hint channel.
-	hints map[string]map[string]string
+	hints HintMap
 }
 
 // New returns a new LWOTG gNMI server. The hostname is used to specify the hostname of the OTG server
@@ -49,7 +51,7 @@ func New(ctx context.Context, hostname string) (*Server, error) {
 	return &Server{
 		c:          c,
 		GNMIServer: g,
-		hints:      map[string]map[string]string{},
+		hints:      HintMap{},
 	}, nil
 }
 
@@ -92,6 +94,23 @@ func (s *Server) GetHint(group, key string) (value string, ok bool) {
 
 	value, ok = s.hints[group][key]
 	return
+}
+
+// GetHints returns a copy of the current hints.
+func (s *Server) GetHints() HintMap {
+	s.hintsMu.RLock()
+	defer s.hintsMu.RUnlock()
+
+	// We want to return a copy so that the user can't modify it, so
+	// walk the map to copy it.
+	m := HintMap{}
+	for gk, gv := range s.hints {
+		m[gk] = map[string]string{}
+		for k, v := range gv {
+			m[gk][k] = v
+		}
+	}
+	return m
 }
 
 // AddTask adds the task t to the current tasks run by the gNMI server. Tasks are

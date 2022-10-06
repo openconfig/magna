@@ -17,12 +17,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-ping/ping"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/flows/mpls"
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem"
+	"github.com/openconfig/magna/telemetry/arp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -71,6 +73,8 @@ func main() {
 	otgSrv.SetHintChannel(hintCh)
 	otgSrv.SetProtocolHandler(gatewayPinger)
 	telemSrv.SetHintChannel(context.Background(), hintCh)
+
+	telemSrv.AddTask(arp.New(context.Background(), telemSrv.GetHints, time.Now().UnixNano))
 
 	otgLis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
