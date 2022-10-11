@@ -94,8 +94,8 @@ func (s *Server) GetHint(group, key string) (value string, ok bool) {
 	return
 }
 
-// AddTask adds the task t to the current tasks run by the gNMI server. It can be used to
-// register a new function that populates additional telemetry data.
+// AddTask adds the task t to the current tasks run by the gNMI server. Tasks are
+// functions that produce telemetry information that is to be published by gNMI.
 func (s *Server) AddTask(t gnmit.Task) error {
 	return s.GNMIServer.RegisterTask(t)
 }

@@ -1,4 +1,6 @@
-// Package lwotg implements a lightweight, extensible OTG implementation.
+// Package lwotg implements a lightweight, extensible OpenTrafficGenerator
+// (github.com/open-traffic-generator) implementation. OpenTrafficGenerator is
+// often abbreviated to OTG.
 package lwotg
 
 import (
@@ -19,7 +21,7 @@ import (
 // are used in OTG for them.
 type Hint struct {
 	// Group is a string used to specify a name for a set of hints that
-	// are associated one one another.
+	// are associated with one another.
 	Group string
 	// Key is the name of the hint.
 	Key string

@@ -7,10 +7,23 @@ package mpls
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
+	"github.com/openconfig/lemming/gnmi/gnmit"
+	"github.com/openconfig/magna/flows/common"
+	"github.com/openconfig/magna/lwotg"
+	"k8s.io/klog"
+
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
+)
+
+var (
+	// timeout specifies how long to wait for a PCAP handle.
+	pcapTimeout = 30 * time.Second
 )
 
 const (
@@ -99,4 +112,119 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	}
 
 	return pktLayers, nil
+}
+
+// New returns a new MPLS flow generator, consisting of:
+//   - a FlowGeneratorFn that is used in lwotg to create the MPLS flow.
+//   - a gnmit.Task that is used to write telemetry.
+func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
+	gnmiCh := make(chan *gpb.Notification, 10)
+
+	// t is a gnmit Task which reads from the gnmi channel specified and writes
+	// into the cache.
+	t := gnmit.Task{
+		Run: func(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
+			go func() {
+				// TODO(robjs): Check with wenbli how gnmit tasks are supposed to be told
+				// to exit.
+				defer cleanup()
+				for {
+					updateFn(<-gnmiCh)
+				}
+			}()
+			return nil
+		},
+	}
+
+	handler := func(flow *otg.Flow, intfs []*lwotg.OTGIntf) (lwotg.TXRXFn, bool, error) {
+		hdrs, err := headers(flow)
+		if err != nil {
+			return nil, false, err
+		}
+
+		pps, err := common.Rate(flow, hdrs)
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot calculate rate, %v", err)
+		}
+
+		tx, rx, err := common.Ports(flow, intfs)
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot determine ports, %v", err)
+		}
+
+		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
+
+		genFunc := func(stop chan struct{}) {
+			klog.Infof("MPLSFlowHandler send function started.")
+
+			buf := gopacket.NewSerializeBuffer()
+			gopacket.SerializeLayers(buf, gopacket.SerializeOptions{}, hdrs...)
+
+			klog.Infof("MPLSFlowHandler Tx interface %s", tx)
+			handle, err := pcap.OpenLive(tx, 9000, true, pcapTimeout)
+			if err != nil {
+				klog.Errorf("MPLSFlowHandler Tx error: %v", err)
+				return
+			}
+			defer handle.Close()
+
+			for {
+				select {
+				case <-stop:
+					klog.Infof("MPLSFlowHandler send exiting on %s", tx)
+					return
+				default:
+					klog.Infof("MPLSFlowHandler sending %d packets", pps)
+					for i := 1; i <= int(pps); i++ {
+						if err := handle.WritePacketData(buf.Bytes()); err != nil {
+							klog.Errorf("MPLSFlowHandler cannot write packet on interface %s, %v", tx, err)
+							return
+						}
+					}
+					// TODO(robjs): This assumes that sending the packets take zero time. We should consider being more accurate here.
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}
+
+		recvFunc := func(stop chan struct{}) {
+			klog.Infof("MPLSFlowHandler receive function started on interface %s", rx)
+			handle, err := pcap.OpenLive(rx, 9000, true, pcapTimeout)
+			if err != nil {
+				klog.Errorf("MPLSFlowHandler Rx error: %v", err)
+				return
+			}
+			defer handle.Close()
+
+			ps := gopacket.NewPacketSource(handle, handle.LinkType())
+			packetCh := ps.Packets()
+			for {
+				select {
+				case <-stop:
+					klog.Infof("MPLSFlowHandler Rx exiting on %s", rx)
+					return
+				case p := <-packetCh:
+					upd, err := rxPacket(p)
+					if err != nil {
+						klog.Errorf("MPLSFlowHandler cannot receive packet on interface %s, %v", rx, err)
+						return
+					}
+					gnmiCh <- upd
+				}
+			}
+		}
+
+		return func(tx, rx *lwotg.FlowController) {
+			go genFunc(tx.Stop)
+			go recvFunc(rx.Stop)
+		}, true, nil
+	}
+
+	return handler, t, nil
+}
+
+// rxPacket is called for each packet that is received.
+func rxPacket(p gopacket.Packet) (*gpb.Notification, error) {
+	klog.Infof("received packet %v", p)
+	return nil, nil
 }
