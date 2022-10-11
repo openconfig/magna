@@ -58,13 +58,31 @@ type Server struct {
 	// based on the registered handlers.
 	configHandlers []func(*otg.Config) error
 
+	// fhMu protects the flowHandlers slice.
+	fhMu sync.Mutex
+	// flowHandlers is the a slice of functions that are called when the SetConfig
+	// RPC is called which specifically handle flows. Each function is a FlowGeneratorFn
+	// and is sequentially called to determine whether it can handle the flow.
+	flowHandlers []FlowGeneratorFn
+
 	// TODO(robjs): Add support for:
 	//   - functions that handle protocol configuration.
-	//   - functions that handle flow configuration.
-	//   - functions that handle traffic generation.
 
 	// cfg is a cache of the current OTG configuration.
 	cfg *otg.Config
+
+	// intMu protects the intfCache.
+	intfMu sync.Mutex
+	// intfCache is a cache of the current set of interfaces for the OTG configuration.
+	intfCache []*OTGIntf
+
+	// tgMu protects the trafficGenerators and generatorChs slices.
+	tgMu sync.Mutex
+	// trafficGenerators are the set of functions that will be called when the OTG server
+	// is requested to start generating traffic.
+	trafficGenerators []TXRXFn
+	// generatorChs are the channels to communicate with the traffic generation functions.
+	generatorChs []*FlowController
 }
 
 // New returns a new lightweight OTG (LWOTG) server.
@@ -73,6 +91,7 @@ func New() *Server {
 		configHandlers: []func(*otg.Config) error{},
 	}
 
+	// Always run the baseInterfaceHandler built-in function.
 	s.AddConfigHandler(s.baseInterfaceHandler)
 	return s
 }
@@ -120,10 +139,50 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 		}
 	}
 
+	flowMethods, err := s.handleFlows(req.GetConfig().GetFlows())
+	if err != nil {
+		return nil, err
+	}
+	s.setTrafficGenFns(flowMethods)
+
+	// Cache the configuration.
 	s.cfg = req.Config
 
 	// TODO(robjs): remove this status 200 once OTG has been updated.
 	return &otg.SetConfigResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+}
+
+// setTrafficGenFns sets the functions that will be used to generate traffic
+// for the flows within the configuration.
+func (s *Server) setTrafficGenFns(fns []TXRXFn) {
+	s.tgMu.Lock()
+	defer s.tgMu.Unlock()
+	s.trafficGenerators = fns
+}
+
+// SetTransmitState implements the SetTransmitState Openapi/OTG RPC.
+func (s *Server) SetTransmitState(ctx context.Context, req *otg.SetTransmitStateRequest) (*otg.SetTransmitStateResponse, error) {
+	klog.Infof("SetTransmitState(%v) called", req)
+
+	switch req.GetTransmitState().GetState() {
+	case otg.TransmitState_State_start:
+		s.startTraffic()
+	case otg.TransmitState_State_stop:
+		s.stopTraffic()
+	default:
+		return nil, status.Errorf(codes.Unimplemented, "states other than starts and stop unimplemented, got: %s", req.GetTransmitState().GetState())
+	}
+
+	// TODO(robjs): once OTG is updated, remove the StatusCode_200 field.
+	return &otg.SetTransmitStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+}
+
+// interfaces returns a copy of the cached set of interfaces in the server.
+func (s *Server) interfaces() []*OTGIntf {
+	s.intfMu.Lock()
+	defer s.intfMu.Unlock()
+
+	return append([]*OTGIntf{}, s.intfCache...)
 }
 
 // baseInterfaceHandler is a built-in handler for interface configuration which is used as a configHandler.
@@ -132,6 +191,9 @@ func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
 	if err != nil {
 		return err
 	}
+
+	// Stash the current set of interfaces as these are used by other callers.
+	s.intfCache = intfs
 
 	if s.hintCh != nil {
 		for _, i := range intfs {
@@ -160,5 +222,6 @@ func (s *Server) baseInterfaceHandler(cfg *otg.Config) error {
 			}
 		}
 	}
+
 	return nil
 }
