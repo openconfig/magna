@@ -139,7 +139,7 @@ func TestSetConfig(t *testing.T) {
 	}, {
 		desc: "error in flow handler",
 		inFlowHandlers: []FlowGeneratorFn{
-			func(*otg.Flow, []*otgIntf) (TXRXFn, bool, error) {
+			func(*otg.Flow, []*OTGIntf) (TXRXFn, bool, error) {
 				return nil, false, fmt.Errorf("cannot parse")
 			},
 		},
@@ -154,7 +154,7 @@ func TestSetConfig(t *testing.T) {
 	}, {
 		desc: "generated flow",
 		inFlowHandlers: []FlowGeneratorFn{
-			func(*otg.Flow, []*otgIntf) (TXRXFn, bool, error) {
+			func(*otg.Flow, []*OTGIntf) (TXRXFn, bool, error) {
 				return func(_, _ *FlowController) {}, true, nil
 			},
 		},

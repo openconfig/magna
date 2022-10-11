@@ -17,6 +17,7 @@ require (
 require (
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/gopacket v1.1.19 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/openconfig/goyang v1.1.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect

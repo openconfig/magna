@@ -39,10 +39,10 @@ func NewFlowController() *FlowController {
 //
 // The arguments to a FlowGeneratorFn are as follows:
 //   - otg.Flow - the flow that is to be generated as described by the OTG schema.
-//   - []*otgIntf - information as to the set of interfaces that are currently within the OTG
+//   - []*OTGIntf - information as to the set of interfaces that are currently within the OTG
 //     configuration. This information can be used to map the flow creation functionality to
 //     the underlying interface.
-type FlowGeneratorFn func(*otg.Flow, []*otgIntf) (TXRXFn, bool, error)
+type FlowGeneratorFn func(*otg.Flow, []*OTGIntf) (TXRXFn, bool, error)
 
 // AddFlowHandlers adds the set of flow generator functions specified to the flow handlers that
 // are considered as candidates by the server.
