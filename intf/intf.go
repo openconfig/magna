@@ -216,6 +216,16 @@ func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
 	}
 }
 
+// ARPList returns a list of ARP neighbours.
+func ARPList() ([]*ARPEntry, error) {
+	return accessor.ARPList()
+}
+
+// ARPSubscribe subscribes to ARP updates from the underlying accessor.
+func ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error {
+	return accessor.ARPSubscribe(updates, done)
+}
+
 // Interfaces returns a list of interfaces from the local system.
 func Interfaces() ([]*Interface, error) {
 	return accessor.Interfaces()
