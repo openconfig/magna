@@ -1,7 +1,7 @@
 name: "arista-magna"
 nodes: {
   name: "ate"
-  type: HOST
+  vendor: MAGNA
   config: {
     image: "magna:latest"
     command: "/app/magna"
@@ -29,9 +29,11 @@ nodes: {
 }
 nodes: {
   name: "dut"
-  type: ARISTA_CEOS
+  vendor: ARISTA
+  model: "ceos"
+  os: "eos"
   config: {
-    image: "ceos:latest"
+    image: "us-west1-docker.pkg.dev/gep-kne/arista/ceos:ga"
     init_image: "us-west1-docker.pkg.dev/gep-kne/kne/networkop/init-wait:ga"
     config_path: "/mnt/flash"
     config_file: "startup-config"

@@ -109,7 +109,7 @@ func (s *Server) SetHintChannel(ch chan Hint) {
 }
 
 // SetProtocolHandler sets the specified function as the function to be called when the
-// SetPrrotocolState RPC is called.
+// SetProtocolState RPC is called.
 func (s *Server) SetProtocolHandler(fn func(*otg.Config, otg.ProtocolState_State_Enum) error) {
 	s.protocolHandler = fn
 }
@@ -123,7 +123,7 @@ func (s *Server) SetProtocolState(ctx context.Context, req *otg.SetProtocolState
 			return nil, err
 		}
 	}
-	return &otg.SetProtocolStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+	return &otg.SetProtocolStateResponse{}, nil
 }
 
 // SetConfig handles the SetConfig OTG RPC. In this implementation it calls the set
@@ -148,8 +148,7 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 	// Cache the configuration.
 	s.cfg = req.Config
 
-	// TODO(robjs): remove this status 200 once OTG has been updated.
-	return &otg.SetConfigResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+	return &otg.SetConfigResponse{}, nil
 }
 
 // setTrafficGenFns sets the functions that will be used to generate traffic
@@ -173,8 +172,7 @@ func (s *Server) SetTransmitState(ctx context.Context, req *otg.SetTransmitState
 		return nil, status.Errorf(codes.Unimplemented, "states other than starts and stop unimplemented, got: %s", req.GetTransmitState().GetState())
 	}
 
-	// TODO(robjs): once OTG is updated, remove the StatusCode_200 field.
-	return &otg.SetTransmitStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+	return &otg.SetTransmitStateResponse{}, nil
 }
 
 // interfaces returns a copy of the cached set of interfaces in the server.
