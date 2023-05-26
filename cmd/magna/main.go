@@ -112,7 +112,7 @@ func main() {
 }
 
 // gatewayPinger is a function that pings all gateway addresses when start protocols is called.
-func gatewayPinger(cfg *otg.Config, _ otg.ProtocolState_State_Enum) error {
+func gatewayPinger(cfg *otg.Config, _ otg.StateProtocolAll_State_Enum) error {
 	gw := []string{}
 	for _, d := range cfg.GetDevices() {
 		for _, i := range d.GetEthernets() {

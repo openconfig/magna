@@ -34,6 +34,7 @@ nodes: {
   os: "eos"
   config: {
     image: "us-west1-docker.pkg.dev/gep-kne/arista/ceos:ga"
+    #image: "arista_dsdn_controller:latest"
     init_image: "us-west1-docker.pkg.dev/gep-kne/kne/networkop/init-wait:ga"
     config_path: "/mnt/flash"
     config_file: "startup-config"
@@ -63,11 +64,11 @@ nodes: {
     }
   }
   services: {
-    key: 6040
+    key: 9340
     value: {
       name: "gribi"
-      inside: 6040
-      outside: 6040
+      inside: 9340
+      outside: 9340
     }
   }
 }
