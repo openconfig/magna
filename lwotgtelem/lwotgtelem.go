@@ -37,7 +37,7 @@ type Server struct {
 	hintsMu sync.RWMutex
 	// hints is the set of Hints that have been received by the Server via the
 	// hint channel.
-  hints HintMap
+	hints HintMap
 }
 
 // New returns a new LWOTG gNMI server. The hostname is used to specify the hostname of the OTG server
