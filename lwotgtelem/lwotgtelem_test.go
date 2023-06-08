@@ -271,16 +271,16 @@ func TestGetHints(t *testing.T) {
 		wantHints: HintMap{
 			"group": map[string]string{"key": "value"},
 		},
-  }, {
-    desc: "multiple groups",
-    inHints: HintMap{
-      "group1": map[string]string{"key1": "val1"},
-      "group2": map[string]string{"key2": "val2"},
-    },
-    wantHints: HintMap{
-      "group1": map[string]string{"key1": "val1"},
-      "group2": map[string]string{"key2": "val2"},
-    },
+	}, {
+		desc: "multiple groups",
+		inHints: HintMap{
+			"group1": map[string]string{"key1": "val1"},
+			"group2": map[string]string{"key2": "val2"},
+		},
+		wantHints: HintMap{
+			"group1": map[string]string{"key1": "val1"},
+			"group2": map[string]string{"key2": "val2"},
+		},
 	}}
 
 	for _, tt := range tests {
