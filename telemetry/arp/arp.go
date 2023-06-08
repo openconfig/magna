@@ -99,7 +99,7 @@ func New(ctx context.Context, hintFn func() lwotgtelem.HintMap, timeFn func() in
 			doneCh := make(chan struct{})
 			if err := intf.ARPSubscribe(ch, doneCh); err != nil {
 				klog.Infof("error opening ARP channel, %v", err)
-				retErr = fmt.Errorf("cannot open ARP update channel, %v", err)
+				VretErr = fmt.Errorf("cannot open ARP update channel, %v", err)
 				return
 			}
 
@@ -108,7 +108,7 @@ func New(ctx context.Context, hintFn func() lwotgtelem.HintMap, timeFn func() in
 				case <-ctx.Done():
 					doneCh <- struct{}{}
 				case u := <-ch:
-					klog.Infof("received an ARP update, %V", u)
+					klog.Infof("received an ARP update, %v", u)
 					hints := hintFn()
 					linkName := hints[interfaceMapHintName][u.Neigh.Interface.Name]
 

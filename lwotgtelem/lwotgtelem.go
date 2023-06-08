@@ -11,6 +11,11 @@ import (
 	"k8s.io/klog"
 )
 
+// HintMap is a structured set of hints that are supplied by the server, it
+// consists of a map keyed by the name of a hints group, that contains a map
+// of hint key to hint value.
+type HintMap map[string]map[string]string
+
 // Server contains the implementation of the gNMI server.
 type Server struct {
 	// c is the base gnmit Collector implementation that is used to store updates.
@@ -32,7 +37,7 @@ type Server struct {
 	hintsMu sync.RWMutex
 	// hints is the set of Hints that have been received by the Server via the
 	// hint channel.
-	hints map[string]map[string]string
+  hints HintMap
 }
 
 // New returns a new LWOTG gNMI server. The hostname is used to specify the hostname of the OTG server
@@ -49,7 +54,7 @@ func New(ctx context.Context, hostname string) (*Server, error) {
 	return &Server{
 		c:          c,
 		GNMIServer: g,
-		hints:      map[string]map[string]string{},
+		hints:      HintMap{},
 	}, nil
 }
 
@@ -78,6 +83,24 @@ func (s *Server) SetHint(group, key, val string) {
 		s.hints[group] = map[string]string{}
 	}
 	s.hints[group][key] = val
+}
+
+// GetHints returns all the hints that the lwotg implementation currently knows
+// about.
+func (s *Server) GetHints() HintMap {
+	s.hintsMu.RLock()
+	defer s.hintsMu.RUnlock()
+
+	// We want to return a copy so that the user can't modify it, so
+	// walk the map to copy it.
+	m := HintMap{}
+	for gk, gv := range s.hints {
+		m[gk] = map[string]string{}
+		for k, v := range gv {
+			m[gk][k] = v
+		}
+	}
+	return m
 }
 
 // GetHint returns the value of the specified hint, it returns 'ok' as false if it is
