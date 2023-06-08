@@ -117,23 +117,6 @@ func (s *Server) GetHint(group, key string) (value string, ok bool) {
 	return
 }
 
-// GetHints returns a copy of the current hints.
-func (s *Server) GetHints() HintMap {
-	s.hintsMu.RLock()
-	defer s.hintsMu.RUnlock()
-
-	// We want to return a copy so that the user can't modify it, so
-	// walk the map to copy it.
-	m := HintMap{}
-	for gk, gv := range s.hints {
-		m[gk] = map[string]string{}
-		for k, v := range gv {
-			m[gk][k] = v
-		}
-	}
-	return m
-}
-
 // AddTask adds the task t to the current tasks run by the gNMI server. Tasks are
 // functions that produce telemetry information that is to be published by gNMI.
 func (s *Server) AddTask(t gnmit.Task) error {

@@ -230,13 +230,3 @@ func ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error {
 func Interfaces() ([]*Interface, error) {
 	return accessor.Interfaces()
 }
-
-// ARPList returns a list of ARP neighbours.
-func ARPList() ([]*ARPEntry, error) {
-	return accessor.ARPList()
-}
-
-// ARPSubscribe subscribes to ARP updates from the underlying accessor.
-func ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error {
-	return accessor.ARPSubscribe(updates, done)
-}
