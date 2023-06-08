@@ -36,7 +36,7 @@ func arpUpdate(h net.HardwareAddr, ip net.IP, link, target string, timeFn func()
 	return common.AddTarget(g[0], target), nil
 }
 
-// arpListFn define s afunction that can be used to get the current set of ARP neighbours. It can be
+// arpListFn defines a function that can be used to get the current set of ARP neighbours. It can be
 // overridden in unit tests to allow internals of the ARP telemetry to be tested.
 var arpListFn = intf.ARPList
 
