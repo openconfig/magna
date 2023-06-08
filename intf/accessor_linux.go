@@ -36,7 +36,7 @@ func init() {
 	// TODO(robjs): Consider whether we should use build tags vs. solely
 	// the underlying system, since this would allow a build tag to say
 	// that the package should use gRPC wire.
-	klog.Infof("Initialising with Linux profile.")
+  klog.Infof("Initialising with Linux profile.")
 	accessor = netlinkAccessor{}
 }
 

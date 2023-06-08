@@ -36,13 +36,18 @@ func arpUpdate(h net.HardwareAddr, ip net.IP, link, target string, timeFn func()
 	return common.AddTarget(g[0], target), nil
 }
 
+// arpListFn define s afunction that can be used to get the current set of ARP neighbours. It can be
+// overridden in unit tests to allow internals of the ARP telemetry to be tested.
+var arpListFn = intf.ARPList
+
 // neighUpdates generates telemetry updates for the ARP neighbours that are in the current ARP
 // cache on the target. It uses the specified target name in the update, and retrieves the mapping
 // of interface names from the specified hintFn. The timeFn is used to populate the timestamp
 // within the gNMI Notification. It returns a slice of gNMI Notifications that are to be sent
 // as telemetry updates. It does not take into account any diff in the ARP cache.
 func neighUpdates(target string, hintFn func() lwotgtelem.HintMap, timeFn func() int64) ([]*gpb.Notification, error) {
-	neighs, err := intf.ARPList()
+	neighs, err := arpListFn()
+>>>>>>> arp
 	if err != nil {
 		return nil, fmt.Errorf("cannot list ARP neighbours, %v", err)
 	}
@@ -104,7 +109,7 @@ func New(ctx context.Context, hintFn func() lwotgtelem.HintMap, timeFn func() in
 				case <-ctx.Done():
 					doneCh <- struct{}{}
 				case u := <-ch:
-					klog.Infof("received an ARP update, %V", u)
+					klog.Infof("received an ARP update, %v", u)
 					hints := hintFn()
 					linkName := hints[interfaceMapHintName][u.Neigh.Interface.Name]
 

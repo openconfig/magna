@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/openconfig/lemming/gnmi/gnmit"
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/ygot/testutil"
@@ -249,6 +251,44 @@ func TestHint(t *testing.T) {
 				case got != want.Value:
 					t.Fatalf("did not get expected hint value, got: %v, want: %v", got, want.Value)
 				}
+			}
+		})
+	}
+}
+
+func TestGetHints(t *testing.T) {
+	tests := []struct {
+		desc      string
+		inHints   HintMap
+		wantHints HintMap
+	}{{
+		desc: "no hints found",
+	}, {
+		desc: "one group",
+		inHints: HintMap{
+			"group": map[string]string{"key": "value"},
+		},
+		wantHints: HintMap{
+			"group": map[string]string{"key": "value"},
+		},
+  }, {
+    desc: "multiple groups",
+    inHints: HintMap{
+      "group1": map[string]string{"key1": "val1"},
+      "group2": map[string]string{"key2": "val2"},
+    },
+    wantHints: HintMap{
+      "group1": map[string]string{"key1": "val1"},
+      "group2": map[string]string{"key2": "val2"},
+    },
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			s := &Server{hints: tt.inHints}
+			got := s.GetHints()
+			if diff := cmp.Diff(got, tt.wantHints, cmpopts.EquateEmpty()); diff != "" {
+				t.Fatalf("s.GetHints(): did not get expected hints, diff(-got,+want):\n%s", diff)
 			}
 		})
 	}

@@ -1,3 +1,4 @@
+// Package common implements common telemetry helper functions.
 package common
 
 import (
@@ -17,6 +18,8 @@ func AddTarget(n *gpb.Notification, target string) *gpb.Notification {
 		n.Prefix = &gpb.Path{}
 	}
 	n.Prefix.Target = target
-	n.Prefix.Origin = defaultOrigin
+	if n.Prefix.Origin == "" {
+		n.Prefix.Origin = defaultOrigin
+	}
 	return n
 }
