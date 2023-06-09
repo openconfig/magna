@@ -17,6 +17,8 @@ import (
 	"github.com/openconfig/magna/flows/common"
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
+	"github.com/openconfig/magna/otgyang"
+	"github.com/openconfig/ygot/ygot"
 	"k8s.io/klog"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
@@ -131,7 +133,9 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				defer cleanup()
 				for {
 					_ = <-ticker.C
-					updateFn(<-gnmiCh)
+					for _, u := range f.telemetry() {
+						updateFn(u)
+					}
 				}
 			}()
 			return nil
@@ -171,12 +175,12 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			}
 			defer handle.Close()
 
-			f.Transmit = &val{b: true, ts: time.Now().UnixNano()}
+			f.setTransmit(true)
 			for {
 				select {
 				case <-stop:
 					klog.Infof("MPLSFlowHandler send exiting on %s", tx)
-					f.Transmit = &val{b: false, ts: time.Now().UnixNano()}
+					f.setTransmit(false)
 					return
 				default:
 					klog.Infof("MPLSFlowHandler sending %d packets", pps)
@@ -234,8 +238,7 @@ type flowCounters struct {
 	// tx and rx store the counters for statistics relating to the flow.
 	Tx, Rx *stats
 
-	// lossPct is the calculated percentage loss that the flow has experienced.
-	LossPct *val
+	mu sync.Mutex
 	// transmit indicates whether the flow is currently transmitting.
 	Transmit *val
 
@@ -308,6 +311,41 @@ func (f *flowCounters) updateRx(ts time.Time, size int) {
 	}
 	f.Rx.Pkts.i += 1
 	f.Rx.Pkts.ts = ts.UnixNano()
+}
+
+func (f *flowCounters) setTransmit(state bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Transmit.b = state
+	f.Transmit.ts = time.Now().UnixNano()
+}
+
+func (f *flowCounters) lossPct() float32 {
+	f.Tx.mu.Lock()
+	defer f.Tx.mu.Unlock()
+
+	f.Rx.mu.Lock()
+	defer f.Rx.mu.Unlock()
+
+	return float32(f.Rx.Pkts.i/f.Tx.Pkts.i) * 100.0
+}
+
+func (f *flowCounters) telemetry(name string) []*gpb.Notification {
+	type datapoint struct {
+		d *otgyang.Device
+		ts int64
+	}
+	
+	upd := []*datapoint{}
+
+	t := &otyang.Device{}.GetOrCreateFlow(name)
+	t.Transmit = ygot.Bool(f.Transmit.b)
+	upd = append(upd, &datapoint{d: t, ts: f.Transmit.ts})
+
+	l := &otgyang.Device{}.GetOrCreateFlow(name)
+	l.LossPct = f.lossPct()
+	upd = append(upd, 
+
 }
 
 // stats stores metrics that are tracked for an individual flow direction.
