@@ -44,11 +44,11 @@ type Server struct {
 	// to the telemetry mapping functions.
 	hintCh chan Hint
 
-	// protocolHandler is a function called when the OTG SetProtocolState RPC
-	// is called. It is used to ensure that anything that needs to be done in
-	// the underlying system is performed (e.g., ensuring ARP is populated, or
-	// other daemons are started).
-	protocolHandler func(*otg.Config, otg.ProtocolState_State_Enum) error
+	// protocolHandler is a function called when the OTG SetControlState
+	// with 'protocol' RPC is called. It is used to ensure that anything
+	// that needs to be done in the underlying system is performed (e.g.,
+	// ensuring ARP is populated, or other daemons are started).
+	protocolHandler func(*otg.Config, otg.StateProtocolAll_State_Enum) error
 
 	// chMu protects the configHandlers slice.
 	chMu sync.Mutex
@@ -109,21 +109,43 @@ func (s *Server) SetHintChannel(ch chan Hint) {
 }
 
 // SetProtocolHandler sets the specified function as the function to be called when the
-// SetPrrotocolState RPC is called.
-func (s *Server) SetProtocolHandler(fn func(*otg.Config, otg.ProtocolState_State_Enum) error) {
+// SetControlState RPC is called with protocol related options.
+func (s *Server) SetProtocolHandler(fn func(*otg.Config, otg.StateProtocolAll_State_Enum) error) {
 	s.protocolHandler = fn
 }
 
-// SetProtocolState handles the SetProtocolState OTG call. In this implementation it calls the
-// protocolHandler function that has been specified.
-func (s *Server) SetProtocolState(ctx context.Context, req *otg.SetProtocolStateRequest) (*otg.SetProtocolStateResponse, error) {
-	klog.Infof("Setting protocol state based on request, %s", req)
-	if s.protocolHandler != nil {
-		if err := s.protocolHandler(s.cfg, req.GetProtocolState().GetState()); err != nil {
-			return nil, err
+// SetControlState handles the SetControlState OTG RPC. This implementation only supports:
+//   - starting and stopping all protocols, by calling the protocolHandler function that has been specified.
+//   - starting and stopping all traffic, by calling startTraffic and stopTraffic.
+//
+// It returns an error if an unsupported option is requested.
+func (s *Server) SetControlState(ctx context.Context, req *otg.SetControlStateRequest) (*otg.SetControlStateResponse, error) {
+	klog.Infof("Setting control state based on request, %s", req)
+
+	switch st := req.GetControlState().GetChoice(); st {
+	case otg.ControlState_Choice_protocol:
+		if st := req.GetControlState().GetProtocol().GetChoice(); st != otg.StateProtocol_Choice_all {
+			return nil, status.Errorf(codes.Unimplemented, "no support for enabling and disabling individual protocols, got: %s", st)
 		}
+
+		if s.protocolHandler != nil {
+			if err := s.protocolHandler(s.cfg, req.GetControlState().GetProtocol().GetAll().GetState()); err != nil {
+				return nil, err
+			}
+		}
+	case otg.ControlState_Choice_traffic:
+		switch a := req.GetControlState().GetTraffic().GetFlowTransmit().GetState(); a {
+		case otg.StateTrafficFlowTransmit_State_start:
+			s.startTraffic()
+		case otg.StateTrafficFlowTransmit_State_stop:
+			s.stopTraffic()
+		default:
+			return nil, status.Errorf(codes.Unimplemented, "traffic control modes other than start and stop are not implemented, got: %s", a)
+		}
+	default:
+		return nil, status.Errorf(codes.Unimplemented, "got unimplemented control state request, %s", st)
 	}
-	return &otg.SetProtocolStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+	return &otg.SetControlStateResponse{}, nil
 }
 
 // SetConfig handles the SetConfig OTG RPC. In this implementation it calls the set
@@ -148,8 +170,7 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 	// Cache the configuration.
 	s.cfg = req.Config
 
-	// TODO(robjs): remove this status 200 once OTG has been updated.
-	return &otg.SetConfigResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
+	return &otg.SetConfigResponse{}, nil
 }
 
 // setTrafficGenFns sets the functions that will be used to generate traffic
@@ -158,23 +179,6 @@ func (s *Server) setTrafficGenFns(fns []TXRXFn) {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()
 	s.trafficGenerators = fns
-}
-
-// SetTransmitState implements the SetTransmitState Openapi/OTG RPC.
-func (s *Server) SetTransmitState(ctx context.Context, req *otg.SetTransmitStateRequest) (*otg.SetTransmitStateResponse, error) {
-	klog.Infof("SetTransmitState(%v) called", req)
-
-	switch req.GetTransmitState().GetState() {
-	case otg.TransmitState_State_start:
-		s.startTraffic()
-	case otg.TransmitState_State_stop:
-		s.stopTraffic()
-	default:
-		return nil, status.Errorf(codes.Unimplemented, "states other than starts and stop unimplemented, got: %s", req.GetTransmitState().GetState())
-	}
-
-	// TODO(robjs): once OTG is updated, remove the StatusCode_200 field.
-	return &otg.SetTransmitStateResponse{StatusCode_200: &otg.ResponseWarning{}}, nil
 }
 
 // interfaces returns a copy of the cached set of interfaces in the server.
