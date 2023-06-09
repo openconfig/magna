@@ -56,7 +56,7 @@ func neighUpdates(target string, hintFn func() lwotgtelem.HintMap, timeFn func()
 	klog.Infof("got hints, %v", hints)
 	if _, ok := hints[interfaceMapHintName]; !ok {
 		klog.Errorf("no valid hints, %v", hints)
-		return nil, fmt.Errorf("arpNeighbors: cannot map with nil interface mapping table.")
+		return nil, fmt.Errorf("arpNeighbors: cannot map with nil interface mapping table")
 	}
 
 	upds := []*gpb.Notification{}
