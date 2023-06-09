@@ -9,47 +9,83 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
-func TestSetProtocols(t *testing.T) {
+func TestSetControlState(t *testing.T) {
 
-	okResponse := &otg.SetProtocolStateResponse{
-		StatusCode_200: &otg.ResponseWarning{},
-	}
-
+	okResponse := &otg.SetControlStateResponse{}
 	state := "UNKNOWN"
+	trafficStart := otg.StateTrafficFlowTransmit_State_start
+	trafficStop := otg.StateTrafficFlowTransmit_State_stop
+	trafficPause := otg.StateTrafficFlowTransmit_State_pause
+	trafficResume := otg.StateTrafficFlowTransmit_State_resume
 
 	tests := []struct {
 		desc              string
-		inProtocolHandler func(*otg.Config, otg.ProtocolState_State_Enum) error
-		inRequest         *otg.SetProtocolStateRequest
-		wantResponse      *otg.SetProtocolStateResponse
+		inProtocolHandler func(*otg.Config, otg.StateProtocolAll_State_Enum) error
+		inTrafficFunc     []TXRXFn
+		inRequest         *otg.SetControlStateRequest
+		wantResponse      *otg.SetControlStateResponse
+		wantErrCode       codes.Code
 		wantFn            func(t *testing.T)
 	}{{
-		desc: "start with nil protocol handler",
-		inRequest: &otg.SetProtocolStateRequest{
-			ProtocolState: &otg.ProtocolState{
-				State: otg.ProtocolState_State_start,
+		desc: "port state - unimplemented",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_port,
+			},
+		},
+		wantErrCode: codes.Unimplemented,
+	}, {
+		desc: "protocol state for individual protocol",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_protocol,
+				Protocol: &otg.StateProtocol{
+					Choice: otg.StateProtocol_Choice_route,
+				},
+			},
+		},
+		wantErrCode: codes.Unimplemented,
+	}, {
+		desc: "protocol state for all - with nil protocol handler",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_protocol,
+				Protocol: &otg.StateProtocol{
+					Choice: otg.StateProtocol_Choice_all,
+					All: &otg.StateProtocolAll{
+						State: otg.StateProtocolAll_State_start,
+					},
+				},
 			},
 		},
 		wantResponse: okResponse,
 	}, {
-		desc: "protocol handler called",
-		inProtocolHandler: func(_ *otg.Config, r otg.ProtocolState_State_Enum) error {
+		desc: "protocol state for all - with specified protocol handler",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_protocol,
+				Protocol: &otg.StateProtocol{
+					Choice: otg.StateProtocol_Choice_all,
+					All: &otg.StateProtocolAll{
+						State: otg.StateProtocolAll_State_start,
+					},
+				},
+			},
+		},
+		inProtocolHandler: func(_ *otg.Config, r otg.StateProtocolAll_State_Enum) error {
 			switch r {
-			case otg.ProtocolState_State_start:
+			case otg.StateProtocolAll_State_start:
 				state = "START"
-			case otg.ProtocolState_State_stop:
+			case otg.StateProtocolAll_State_stop:
 				state = "STOP"
 			}
 			return nil
-		},
-		inRequest: &otg.SetProtocolStateRequest{
-			ProtocolState: &otg.ProtocolState{
-				State: otg.ProtocolState_State_start,
-			},
 		},
 		wantResponse: okResponse,
 		wantFn: func(t *testing.T) {
@@ -58,12 +94,92 @@ func TestSetProtocols(t *testing.T) {
 				t.Fatalf("did not get expected state, got: %s, want: START", state)
 			}
 		},
+	}, {
+		desc: "traffic state with handler",
+		inTrafficFunc: []TXRXFn{
+			func(_, _ *FlowController) {
+				state = "TRAFFIC_CALLED"
+			},
+		},
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_traffic,
+				Traffic: &otg.StateTraffic{
+					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					FlowTransmit: &otg.StateTrafficFlowTransmit{
+						State: &trafficStart,
+					},
+				},
+			},
+		},
+		wantResponse: okResponse,
+		wantFn: func(t *testing.T) {
+			t.Helper()
+			if state != "TRAFFIC_CALLED" {
+				t.Fatalf("did not get expected state, got: %s, want: TRAFFIC_CALLED", state)
+			}
+		},
+	}, {
+		desc: "traffic state with unspecified operation",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_traffic,
+				Traffic: &otg.StateTraffic{
+					Choice: otg.StateTraffic_Choice_unspecified,
+				},
+			},
+		},
+		wantErrCode: codes.Unimplemented,
+	}, {
+		desc: "traffic state with stop operation",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_traffic,
+				Traffic: &otg.StateTraffic{
+					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					FlowTransmit: &otg.StateTrafficFlowTransmit{
+						State: &trafficStop,
+					},
+				},
+			},
+		},
+		wantResponse: okResponse,
+	}, {
+		desc: "traffic state with pause operation",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_traffic,
+				Traffic: &otg.StateTraffic{
+					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					FlowTransmit: &otg.StateTrafficFlowTransmit{
+						State: &trafficPause,
+					},
+				},
+			},
+		},
+		wantErrCode: codes.Unimplemented,
+	}, {
+		desc: "traffic state with resume operation",
+		inRequest: &otg.SetControlStateRequest{
+			ControlState: &otg.ControlState{
+				Choice: otg.ControlState_Choice_traffic,
+				Traffic: &otg.StateTraffic{
+					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					FlowTransmit: &otg.StateTrafficFlowTransmit{
+						State: &trafficResume,
+					},
+				},
+			},
+		},
+		wantErrCode: codes.Unimplemented,
 	}}
 
 	for _, tt := range tests {
+		state = "UNKNOWN"
 		t.Run(tt.desc, func(t *testing.T) {
 			lw := New()
 			lw.SetProtocolHandler(tt.inProtocolHandler)
+			lw.setTrafficGenFns(tt.inTrafficFunc)
 
 			l, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
@@ -82,9 +198,11 @@ func TestSetProtocols(t *testing.T) {
 			}
 			c := otg.NewOpenapiClient(conn)
 
-			got, err := c.SetProtocolState(context.Background(), tt.inRequest)
+			got, err := c.SetControlState(context.Background(), tt.inRequest)
 			if err != nil {
-				t.Fatalf("got error sending request (%s), err: %v", tt.inRequest, err)
+				if gotErr := status.Code(err); gotErr != tt.wantErrCode {
+					t.Fatalf("did not get expected error, got code: %s (%v), want: %s", gotErr, err, tt.wantErrCode)
+				}
 			}
 
 			if diff := cmp.Diff(got, tt.wantResponse, protocmp.Transform()); diff != "" {
@@ -99,9 +217,7 @@ func TestSetProtocols(t *testing.T) {
 }
 
 func TestSetConfig(t *testing.T) {
-	okResponse := &otg.SetConfigResponse{
-		StatusCode_200: &otg.ResponseWarning{},
-	}
+	okResponse := &otg.SetConfigResponse{}
 	tests := []struct {
 		desc             string
 		inConfigHandlers []func(*otg.Config) error

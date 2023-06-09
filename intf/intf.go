@@ -100,32 +100,32 @@ type unimplementedAccessor struct{}
 
 // Interface returns unimplemented for the interface call.
 func (u unimplementedAccessor) Interface(_ string) (*Interface, error) {
-	return nil, fmt.Errorf("unimplemented")
+	return nil, fmt.Errorf("unimplemented Interface method")
 }
 
 // Interfaces returns unimplemented when asked to list interfaces.
 func (u unimplementedAccessor) Interfaces() ([]*Interface, error) {
-	return nil, fmt.Errorf("unimplemented")
+	return nil, fmt.Errorf("unimplemented Interfaces method")
 }
 
 // InterfaceAddresses returns unimplemented when asked for list IP addresses.
 func (u unimplementedAccessor) InterfaceAddresses(_ string) ([]*net.IPNet, error) {
-	return nil, fmt.Errorf("unimplemented")
+	return nil, fmt.Errorf("unimplemented InterfaceAddresses method")
 }
 
 // AddInterfaceIP returns unimplemented when asked to add an interface.
 func (u unimplementedAccessor) AddInterfaceIP(_ string, _ *net.IPNet) error {
-	return fmt.Errorf("unimplemented")
+	return fmt.Errorf("unimplemented AddInterfaceIP method")
 }
 
 // ARPList returns unimplemented when asked to list ARP entries.
 func (u unimplementedAccessor) ARPList() ([]*ARPEntry, error) {
-	return nil, fmt.Errorf("unimplemented")
+	return nil, fmt.Errorf("unimplemented ARPList method")
 }
 
 // ARPSubscribe returns unimplemented when asked to subscribe to ARP changes.
 func (u unimplementedAccessor) ARPSubscribe(_ chan ARPUpdate, _ chan struct{}) error {
-	return fmt.Errorf("unimplemented")
+	return fmt.Errorf("unimplemented ARPSubscribe method")
 }
 
 // accessor is the implementation of the network accessor that should be used. It
@@ -153,7 +153,7 @@ func ValidInterface(name string) bool {
 func AddIP(intf string, addr *net.IPNet) error {
 	addrs, err := accessor.InterfaceAddresses(intf)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot determine interface addresses, %v", err)
 	}
 
 	for _, a := range addrs {
@@ -216,11 +216,6 @@ func AwaitARP(ctx context.Context, addr net.IP) (net.HardwareAddr, error) {
 	}
 }
 
-// Interfaces returns a list of interfaces from the local system.
-func Interfaces() ([]*Interface, error) {
-	return accessor.Interfaces()
-}
-
 // ARPList returns a list of ARP neighbours.
 func ARPList() ([]*ARPEntry, error) {
 	return accessor.ARPList()
@@ -229,4 +224,9 @@ func ARPList() ([]*ARPEntry, error) {
 // ARPSubscribe subscribes to ARP updates from the underlying accessor.
 func ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error {
 	return accessor.ARPSubscribe(updates, done)
+}
+
+// Interfaces returns a list of interfaces from the local system.
+func Interfaces() ([]*Interface, error) {
+	return accessor.Interfaces()
 }
