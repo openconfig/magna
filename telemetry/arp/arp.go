@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/openconfig/lemming/gnmi/gnmit"
 	"github.com/openconfig/magna/intf"
 	"github.com/openconfig/magna/lwotgtelem"
+	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"github.com/openconfig/magna/otgyang"
 	"github.com/openconfig/magna/telemetry/common"
 	"github.com/openconfig/ygot/ygot"
@@ -47,7 +47,6 @@ var arpListFn = intf.ARPList
 // as telemetry updates. It does not take into account any diff in the ARP cache.
 func neighUpdates(target string, hintFn func() lwotgtelem.HintMap, timeFn func() int64) ([]*gpb.Notification, error) {
 	neighs, err := arpListFn()
->>>>>>> arp
 	if err != nil {
 		return nil, fmt.Errorf("cannot list ARP neighbours, %v", err)
 	}
