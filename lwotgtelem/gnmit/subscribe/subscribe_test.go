@@ -1,3 +1,5 @@
+//go:build !race
+
 /*
 Copyright 2017 Google Inc.
 
