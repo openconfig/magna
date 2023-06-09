@@ -156,6 +156,11 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
 
 		f := newFlowCounters()
+		// TODO(robjs): Define a report function that takes a chan struct{} indicating when to
+		// stop, and uses a time.Ticker to read the contents of f, generate a gNMI update, and
+		// write it to the gnmiCh.
+		//
+		// This can likely be done by the gnmit.Task defined above.
 
 		genFunc := func(stop chan struct{}) {
 			klog.Infof("MPLSFlowHandler send function started.")
@@ -212,7 +217,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 					klog.Infof("MPLSFlowHandler Rx exiting on %s", rx)
 					return
 				case p := <-packetCh:
-					if err := rxPacket(gnmiCh, p); err != nil {
+					if err := rxPacket(p, f); err != nil {
 						klog.Errorf("MPLSFlowHandler cannot receive packet on interface %s, %v", rx, err)
 						return
 					}
@@ -335,8 +340,9 @@ type val struct {
 	b bool
 }
 
-// rxPacket is called for each packet that is received.
-func rxPacket(gnmiCh chan *gpb.Notification, p gopacket.Packet) error {
+// rxPacket is called for each packet that is received. It filters the packets to identify
+// those that are part of the flow, and subsequently accounts them.
+func rxPacket(p gopacket.Packet, s *stats) error {
 	// TODO(robjs): filter packets to ensure that they are packets that are part of this flow.
 
 	// TODO(robjs): every time tick, generate a notification from the stats that are
