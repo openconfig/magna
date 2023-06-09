@@ -3,6 +3,7 @@ package mpls
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -354,6 +355,180 @@ func TestHeaders(t *testing.T) {
 			}
 			if diff := cmp.Diff(got, tt.wantLayers, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("did not get expected layers, diff(-got,+want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFlowUpdateTX(t *testing.T) {
+	tests := []struct {
+		desc       string
+		inCounters *flowCounters
+		inPPS      int64
+		inSize     int
+		want       *flowCounters
+	}{{
+		desc:       "tx: packet counters initialised",
+		inCounters: newFlowCounters(),
+		inPPS:      10,
+		inSize:     100,
+		want: &flowCounters{
+			Tx: &stats{
+				Rate:   &val{ts: 42, f: 10},
+				Octets: &val{ts: 42, i: 1000},
+				Pkts:   &val{ts: 42, i: 10},
+			},
+			Rx: &stats{},
+		},
+	}, {
+		desc: "tx: append to existing packet count",
+		inCounters: &flowCounters{
+			Tx: &stats{
+				Rate:   &val{ts: 1, f: 100},
+				Octets: &val{ts: 1, i: 200},
+				Pkts:   &val{ts: 1, i: 300},
+			},
+		},
+		inPPS:  100,
+		inSize: 20,
+		want: &flowCounters{
+			Tx: &stats{
+				Rate:   &val{ts: 42, f: 100},
+				Octets: &val{ts: 42, i: 2200},
+				Pkts:   &val{ts: 42, i: 400},
+			},
+		},
+	}}
+
+	ft := func() int64 { return 42 }
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			flowTimeFn = ft
+
+			got := newFlowCounters()
+			if tt.inCounters != nil {
+				got = tt.inCounters
+			}
+
+			got.updateTx(tt.inPPS, tt.inSize)
+
+			if diff := cmp.Diff(got, tt.want, cmpopts.IgnoreUnexported(stats{}), cmpopts.IgnoreUnexported(flowCounters{}), cmp.AllowUnexported(val{})); diff != "" {
+				t.Fatalf("did not get expected result, diff(-got,+want):\n%s", diff)
+			}
+		})
+	}
+	flowTimeFn = unixTS
+}
+
+func TestFlowUpdateRX(t *testing.T) {
+	type pktArrival struct {
+		t time.Time
+		s int
+	}
+
+	tests := []struct {
+		desc       string
+		inCounters *flowCounters
+		inPackets  []pktArrival
+		want       *flowCounters
+	}{{
+		desc: "single packet arriving",
+		inPackets: []pktArrival{{
+			t: time.Unix(1, 0),
+			s: 10,
+		}},
+		want: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 1e9, i: 10},
+				Pkts:   &val{ts: 1e9, i: 1},
+			},
+			Timeseries: map[int64]int{1: 10},
+		},
+	}, {
+		desc: "multiple packets, same second",
+		inPackets: []pktArrival{{
+			t: time.Unix(1, 0),
+			s: 10,
+		}, {
+			t: time.Unix(1, 0),
+			s: 20,
+		}},
+		want: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 1e9, i: 30},
+				Pkts:   &val{ts: 1e9, i: 2},
+			},
+			Timeseries: map[int64]int{1: 30},
+		},
+	}, {
+		desc: "multiple packets, different seconds",
+		inPackets: []pktArrival{{
+			t: time.Unix(1, 0),
+			s: 10,
+		}, {
+			t: time.Unix(2, 0),
+			s: 20,
+		}, {
+			t: time.Unix(2, 1),
+			s: 10,
+		}},
+		want: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 2e9 + 1, i: 40},
+				Pkts:   &val{ts: 2e9 + 1, i: 3},
+			},
+			Timeseries: map[int64]int{
+				1: 10,
+				2: 30,
+			},
+		},
+	}, {
+		desc: "append to existing data",
+		inCounters: &flowCounters{
+			Rx: &stats{
+				Octets: &val{ts: 1e9, i: 4000},
+				Pkts:   &val{ts: 1e9, i: 200},
+			},
+			Timeseries: map[int64]int{
+				1: 200,
+			},
+		},
+		inPackets: []pktArrival{{
+			t: time.Unix(1, 1),
+			s: 10,
+		}, {
+			t: time.Unix(2, 1),
+			s: 20,
+		}},
+		want: &flowCounters{
+			Rx: &stats{
+				Octets: &val{ts: 2e9 + 1, i: 4030},
+				Pkts:   &val{ts: 2e9 + 1, i: 202},
+			},
+			Timeseries: map[int64]int{
+				1: 210,
+				2: 20,
+			},
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got := newFlowCounters()
+			if tt.inCounters != nil {
+				got = tt.inCounters
+			}
+
+			for _, p := range tt.inPackets {
+				got.updateRx(p.t, p.s)
+			}
+
+			if diff := cmp.Diff(got, tt.want, cmpopts.IgnoreUnexported(stats{}), cmpopts.IgnoreUnexported(flowCounters{}), cmp.AllowUnexported(val{})); diff != "" {
+				t.Fatalf("did not get expected result, diff(-got,+want):\n%s", diff)
 			}
 		})
 	}

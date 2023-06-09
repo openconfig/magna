@@ -70,7 +70,7 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*OTGIntf, error)
 
 			for _, a := range e.Ipv4Addresses {
 				if a.GetPrefix() == 0 {
-					return nil, status.Errorf(codes.InvalidArgument, "unsupported zero prefix length for address %s", a.Address)
+					return nil, status.Errorf(codes.InvalidArgument, "unsupported zero prefix length for address %s (in %s)", a.Address, e)
 				}
 
 				i.IPv4 = append(i.IPv4, &ipAddress{

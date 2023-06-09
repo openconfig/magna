@@ -47,6 +47,7 @@ var arpListFn = intf.ARPList
 // as telemetry updates. It does not take into account any diff in the ARP cache.
 func neighUpdates(target string, hintFn func() lwotgtelem.HintMap, timeFn func() int64) ([]*gpb.Notification, error) {
 	neighs, err := arpListFn()
+>>>>>>> arp
 	if err != nil {
 		return nil, fmt.Errorf("cannot list ARP neighbours, %v", err)
 	}
@@ -99,7 +100,7 @@ func New(ctx context.Context, hintFn func() lwotgtelem.HintMap, timeFn func() in
 			doneCh := make(chan struct{})
 			if err := intf.ARPSubscribe(ch, doneCh); err != nil {
 				klog.Infof("error opening ARP channel, %v", err)
-				VretErr = fmt.Errorf("cannot open ARP update channel, %v", err)
+				retErr = fmt.Errorf("cannot open ARP update channel, %v", err)
 				return
 			}
 

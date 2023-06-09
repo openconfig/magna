@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/vishvananda/netlink"
+	"k8s.io/klog"
 )
 
 const (
