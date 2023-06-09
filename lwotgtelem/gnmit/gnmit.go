@@ -26,7 +26,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/gnmi/cache"
-	"github.com/openconfig/lemming/gnmi/subscribe"
+	"github.com/openconfig/magna/lwotgtelem/gnmit/subscribe"
 	"github.com/openconfig/ygot/ygot"
 	"google.golang.org/grpc"
 

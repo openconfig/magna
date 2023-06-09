@@ -14,9 +14,9 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
-	"github.com/openconfig/lemming/gnmi/gnmit"
 	"github.com/openconfig/magna/flows/common"
 	"github.com/openconfig/magna/lwotg"
+	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"k8s.io/klog"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
