@@ -119,17 +119,18 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 //   - a FlowGeneratorFn that is used in lwotg to create the MPLS flow.
 //   - a gnmit.Task that is used to write telemetry.
 func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
-	gnmiCh := make(chan *gpb.Notification, 10)
-
+	f := newFlowCounters()
 	// t is a gnmit Task which reads from the gnmi channel specified and writes
 	// into the cache.
 	t := gnmit.Task{
 		Run: func(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
+			ticker := time.NewTicker(1 * time.Second)
 			go func() {
 				// TODO(robjs): Check with wenbli how gnmit tasks are supposed to be told
 				// to exit.
 				defer cleanup()
 				for {
+					_ = <-ticker.C
 					updateFn(<-gnmiCh)
 				}
 			}()
@@ -154,8 +155,6 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 		}
 
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
-
-		f := newFlowCounters()
 
 		genFunc := func(stop chan struct{}) {
 			klog.Infof("MPLSFlowHandler send function started.")
