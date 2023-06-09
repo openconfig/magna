@@ -1,4 +1,4 @@
 username: admin
 password: admin
-topology: /usr/local/google/home/robjs/go/src/github.com/openconfig/magna/kne/arista_magna.textproto
-cli: /usr/local/google/home/robjs/go/bin/kne
+topology: 
+cli: 
