@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -184,10 +183,6 @@ func New(ctx context.Context, addr, hostname string, sendMeta bool, tasks []Task
 	return c, lis.Addr().String(), nil
 }
 
-type populateDefaultser interface {
-	PopulateDefaults()
-}
-
 // Stop halts the running collector.
 func (c *Collector) Stop() {
 	c.stopFn()
@@ -214,8 +209,6 @@ func (c *Collector) handleUpdate(resp *gpb.SubscribeResponse) error {
 // RPC, and acts as a cache for exactly one target.
 type Collector struct {
 	cache *cache.Cache
-
-	smu sync.Mutex
 
 	// name is the hostname of the client.
 	name string
