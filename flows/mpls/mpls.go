@@ -495,6 +495,8 @@ func (f *flowCounters) telemetry() []*gpb.Notification {
 	return notis
 }
 
+// float32ToBinary converts a float32 value into IEEE754 representation
+// and converts it to the generated ygot type for use in generated structs.
 func float32ToBinary(f float32) otgyang.Binary {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, math.Float32bits(f))
@@ -513,6 +515,7 @@ type stats struct {
 	Pkts *val
 }
 
+// val is used to store a timestamped telemetry value.
 type val struct {
 	// ts is the timestamp in nanoseconds since the unix epoch that the value was
 	// collected.
@@ -527,6 +530,11 @@ type val struct {
 	s string
 }
 
+var (
+	// timeFn is a function that returns a time.Time that can be overloaded in unit tests.
+	timeFn = time.Now
+)
+
 // rxPacket is called for each packet that is received. It takes arguments of the statitics
 // tracking the flow, the set of headers that are expected, and the received packet.
 func rxPacket(f *flowCounters, hdrs []gopacket.SerializableLayer, p gopacket.Packet) error {
@@ -538,12 +546,7 @@ func rxPacket(f *flowCounters, hdrs []gopacket.SerializableLayer, p gopacket.Pac
 		return nil
 	}
 
-	// TODO(robjs): every time tick, generate a notification from the stats that are
-	// collected. rate should be calculated for the rx direction. rx rate should be
-	// calculated by reading all of the timeseries statistics other than the last entry
-	// (which may be still being appended to), and then subsequently calculating the
-	// average PPS rate.
-	klog.Infof("received packet %v", p)
+	f.updateRx(timeFn(), len(p.Data()))
 	return nil
 }
 

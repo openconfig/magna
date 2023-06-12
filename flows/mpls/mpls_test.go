@@ -871,7 +871,6 @@ func TestPacketInFlow(t *testing.T) {
 	gopacket.SerializeLayers(buf, opts, stackedPacket...)
 	stackedPkt := buf.Bytes()
 	inStacked := gopacket.NewPacket(stackedPkt, layers.LinkTypeEthernet, gopacket.Default)
-	_ = inStacked
 
 	tests := []struct {
 		desc      string
@@ -1043,4 +1042,104 @@ func TestPacketInFlow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRxPacket(t *testing.T) {
+	simplePacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       net.HardwareAddr{0, 0, 0, 0, 0, 0},
+			DstMAC:       net.HardwareAddr{1, 2, 3, 4, 5, 6},
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: true,
+		},
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{}
+
+	gopacket.SerializeLayers(buf, opts, simplePacket...)
+	simplePkt := buf.Bytes()
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	fixedTimeFn := func() time.Time { return time.Date(2023, 06, 12, 10, 00, 00, 00, time.UTC) }
+
+	type packetWithTime struct {
+		timeFn func() time.Time
+		packet gopacket.Packet
+	}
+
+	tests := []struct {
+		desc         string
+		inCounters   *flowCounters
+		inHeaders    []gopacket.SerializableLayer
+		inPackets    []packetWithTime
+		wantCounters *flowCounters
+	}{{
+		desc:       "matched increments empty counters",
+		inCounters: newFlowCounters(),
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       net.HardwareAddr{0, 0, 0, 0, 0, 0},
+				DstMAC:       net.HardwareAddr{1, 2, 3, 4, 5, 6},
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+		},
+		inPackets: []packetWithTime{{
+			timeFn: fixedTimeFn,
+			packet: inSimple,
+		}},
+		wantCounters: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 1686564000000000000, u: 60},
+				Pkts:   &val{ts: 1686564000000000000, u: 1},
+			},
+			Timeseries: map[int64]int{1686564000: 60},
+		},
+	}, {
+		desc:       "matched - two packets",
+		inCounters: newFlowCounters(),
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       net.HardwareAddr{0, 0, 0, 0, 0, 0},
+				DstMAC:       net.HardwareAddr{1, 2, 3, 4, 5, 6},
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+		},
+		inPackets: []packetWithTime{{
+			timeFn: fixedTimeFn,
+			packet: inSimple,
+		}, {
+			timeFn: func() time.Time { return time.Date(2023, 06, 12, 10, 00, 01, 00, time.UTC) },
+			packet: inSimple,
+		}},
+		wantCounters: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 1686564001000000000, u: 120},
+				Pkts:   &val{ts: 1686564001000000000, u: 2},
+			},
+			Timeseries: map[int64]int{
+				1686564000: 60,
+				1686564001: 60,
+			},
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			for _, p := range tt.inPackets {
+				timeFn = p.timeFn
+				rxPacket(tt.inCounters, tt.inHeaders, p.packet)
+			}
+			if diff := cmp.Diff(tt.inCounters, tt.wantCounters, cmpopts.IgnoreUnexported(stats{}), cmp.AllowUnexported(val{}), cmpopts.IgnoreUnexported(flowCounters{})); diff != "" {
+				t.Fatalf("did not get expected counters, diff(-got,+want):\n%s", diff)
+			}
+		})
+	}
+	timeFn = time.Now
 }
