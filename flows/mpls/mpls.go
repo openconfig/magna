@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -151,6 +152,8 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			return nil, false, err
 		}
 
+		f.Headers = hdrs
+
 		pps, err := common.Rate(flow, hdrs)
 		if err != nil {
 			return nil, false, fmt.Errorf("cannot calculate rate, %v", err)
@@ -219,7 +222,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 					klog.Infof("MPLSFlowHandler Rx exiting on %s", rx)
 					return
 				case p := <-packetCh:
-					if err := rxPacket(f, p); err != nil {
+					if err := rxPacket(f, hdrs, p); err != nil {
 						klog.Errorf("MPLSFlowHandler cannot receive packet on interface %s, %v", rx, err)
 						return
 					}
@@ -241,6 +244,10 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 type flowCounters struct {
 	// Name is the name of the flow.
 	Name *val
+
+	// Headers is the set of headers expected for packets matching this flow.
+	Headers []gopacket.SerializableLayer
+
 	// tx and rx store the counters for statistics relating to the flow.
 	Tx, Rx *stats
 
@@ -520,9 +527,16 @@ type val struct {
 	s string
 }
 
-// rxPacket is called for each packet that is received.
-func rxPacket(f *flowCounters, p gopacket.Packet) error {
-	// TODO(robjs): filter packets to ensure that they are packets that are part of this flow.
+// rxPacket is called for each packet that is received. It takes arguments of the statitics
+// tracking the flow, the set of headers that are expected, and the received packet.
+func rxPacket(f *flowCounters, hdrs []gopacket.SerializableLayer, p gopacket.Packet) error {
+	match, err := packetInFlow(hdrs, p)
+	if err != nil {
+		return err
+	}
+	if !match {
+		return nil
+	}
 
 	// TODO(robjs): every time tick, generate a notification from the stats that are
 	// collected. rate should be calculated for the rx direction. rx rate should be
@@ -531,4 +545,40 @@ func rxPacket(f *flowCounters, p gopacket.Packet) error {
 	// average PPS rate.
 	klog.Infof("received packet %v", p)
 	return nil
+}
+
+// packetinFlow determines whether the packet, p, matches the headers specified in hdrs. A partial match is
+// allowed. That is to say hdrs can partially specify the headers that are present within p. It returns a
+// bool indicating whether the packet matches, and an error if it is unable to examine the packet (e.g.,
+// if an unexpected layer is found).
+func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) (bool, error) {
+	for i, expected := range hdrs {
+		if len(p.Layers()) < i {
+			// We allow for the headers to be a partial match of the headers inside the packet.
+			continue
+		}
+		l := p.Layers()[i]
+		switch exp := expected.(type) {
+		case *layers.Ethernet:
+			got, ok := l.(*layers.Ethernet)
+			if !ok {
+				return false, nil
+			}
+			if !reflect.DeepEqual(got.SrcMAC, exp.SrcMAC) || !reflect.DeepEqual(got.DstMAC, exp.DstMAC) || got.EthernetType != exp.EthernetType || got.Length != exp.Length {
+				return false, nil
+			}
+		case *layers.MPLS:
+			got, ok := l.(*layers.MPLS)
+			if !ok {
+				return false, nil
+			}
+			if got.Label != exp.Label || got.TrafficClass != exp.TrafficClass || got.StackBottom != exp.StackBottom {
+				// Ignore TTL.
+				return false, nil
+			}
+		default:
+			return false, fmt.Errorf("unknown layer type %s in packet", l.LayerType())
+		}
+	}
+	return true, nil
 }

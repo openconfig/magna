@@ -817,3 +817,230 @@ func TestTelemetry(t *testing.T) {
 		})
 	}
 }
+
+func TestPacketInFlow(t *testing.T) {
+
+	mac, err := net.ParseMAC("16:61:ee:09:bc:dc")
+	if err != nil {
+		t.Fatalf("cannot parse MAC, %v", err)
+	}
+
+	macTwo, err := net.ParseMAC("00:00:ee:09:bc:dc")
+	if err != nil {
+		t.Fatalf("cannot parse MAC, %v", err)
+	}
+
+	simplePacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: true,
+		},
+	}
+
+	stackedPacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: false,
+		},
+		&layers.MPLS{
+			Label:       44,
+			TTL:         200,
+			StackBottom: true,
+		},
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{}
+
+	gopacket.SerializeLayers(buf, opts, simplePacket...)
+	simplePkt := buf.Bytes()
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	gopacket.SerializeLayers(buf, opts, stackedPacket...)
+	stackedPkt := buf.Bytes()
+	inStacked := gopacket.NewPacket(stackedPkt, layers.LinkTypeEthernet, gopacket.Default)
+	_ = inStacked
+
+	tests := []struct {
+		desc      string
+		inHeaders []gopacket.SerializableLayer
+		inPacket  gopacket.Packet
+		want      bool
+		wantErr   bool
+	}{{
+		desc: "in Ethernet flow",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+		},
+		inPacket: inSimple,
+		want:     true,
+	}, {
+		desc: "not in Ethernet flow - MAC",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       macTwo,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "not in Ethernet flow - EtherType",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeIPv4,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "in flow, MPLS",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       42,
+				TTL:         104, // mismatched, ignored
+				StackBottom: true,
+			},
+		},
+		inPacket: inSimple,
+		want:     true,
+	}, {
+		desc: "not in flow, MPLS BoS",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       42,
+				TTL:         104, // mismatched, ignored
+				StackBottom: false,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "not in flow, MPLS Traffic Class",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:        42,
+				TTL:          104, // mismatched, ignored
+				StackBottom:  true,
+				TrafficClass: 4,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "not in flow, MPLS Label",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       44,
+				TTL:         104, // mismatched, ignored
+				StackBottom: true,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "in flow, stacked MPLS",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       42,
+				TTL:         104, // mismatched, ignored
+				StackBottom: false,
+			},
+			&layers.MPLS{
+				Label:       44,
+				TTL:         104,
+				StackBottom: true,
+			},
+		},
+		inPacket: inStacked,
+		want:     true,
+	}, {
+		desc: "partial match, stacked MPLS",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       42,
+				TTL:         104, // mismatched, ignored
+				StackBottom: false,
+			},
+		},
+		inPacket: inStacked,
+		want:     true,
+	}, {
+		desc: "partial not matched, stacked MPLS",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       mac,
+				DstMAC:       mac,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       84,
+				TTL:         104, // mismatched, ignored
+				StackBottom: false,
+			},
+		},
+		inPacket: inStacked,
+		want:     false,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := packetInFlow(tt.inHeaders, tt.inPacket)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("did not get expected error, got: %v, wantErr: %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Fatalf("packetInFlow(hdrs, packet): didn't get expected result, got: %v, want: %v", got, tt.want)
+			}
+		})
+	}
+}
