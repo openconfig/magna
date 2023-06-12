@@ -135,7 +135,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				// to exit.
 				defer cleanup()
 				for {
-					_ = <-ticker.C
+					<-ticker.C
 					for _, u := range f.telemetry() {
 						updateFn(u)
 					}
