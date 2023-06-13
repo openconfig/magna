@@ -890,7 +890,7 @@ func TestPacketInFlow(t *testing.T) {
 		inPacket: inSimple,
 		want:     true,
 	}, {
-		desc: "not in Ethernet flow - MAC",
+		desc: "in Ethernet flow - different MAC",
 		inHeaders: []gopacket.SerializableLayer{
 			&layers.Ethernet{
 				SrcMAC:       macTwo,
@@ -899,7 +899,7 @@ func TestPacketInFlow(t *testing.T) {
 			},
 		},
 		inPacket: inSimple,
-		want:     false,
+		want:     true,
 	}, {
 		desc: "not in Ethernet flow - EtherType",
 		inHeaders: []gopacket.SerializableLayer{
