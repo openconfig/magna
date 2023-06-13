@@ -581,7 +581,7 @@ func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) (bool, e
 	want, wantOK := inner.(*layers.Ethernet)
 	got, gotOK := innerSpec.(*layers.Ethernet)
 	if !wantOK || !gotOK {
-		klog.Infof("packet is not part of the flow, no Ethernet payload")
+		klog.Infof("packet is not part of the flow, no Ethernet payload, wantOK: %v, gotOK: %v")
 		return false, nil
 	}
 	return reflect.DeepEqual(want.SrcMAC, want.DstMAC) && reflect.DeepEqual(got.SrcMAC, got.DstMAC), nil
