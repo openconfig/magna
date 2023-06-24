@@ -1375,7 +1375,7 @@ func TestRxPacket(t *testing.T) {
 func TestDecode(t *testing.T) {
 
 	mac := net.HardwareAddr{0, 1, 2, 3, 4, 5}
-	p := make([]byte, 64, 64)
+	p := make([]byte, 64)
 	pkt := []gopacket.SerializableLayer{
 		&layers.Ethernet{
 			SrcMAC:       mac,
