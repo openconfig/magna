@@ -156,27 +156,6 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 		})
 	}
 
-	/*
-	   	// Append the marking layer for this flow.
-	   	src, dst := make([]byte, 4), make([]byte, 4)
-	   	if _, err := rand.Read(src); err != nil {
-	   		return nil, fmt.Errorf("cannot generate random source MAC, %v", err)
-	   	}
-	   	if _, err := rand.Read(dst); err != nil {
-	   		return nil, fmt.Errorf("cannot generate random dst MAC, %v", err)
-	   	}
-	     // Rewrite the first byte of both of the source and destination to ensure that we
-	     // are sending a packet to a non-multicast address.
-	   	src[0], dst[0] = 10, 10
-	   	klog.Infof("packet payload is from %v to %v", src, dst)
-
-	   	pktLayers = append(pktLayers, &layers.IPv4{
-	   		Version: 4,
-	   		SrcIP:   net.IP(src),
-	   		DstIP:   net.IP(dst),
-	   	})
-	*/
-
 	// Build a packet payload consisting of 64-bytes to ensure that we have a
 	// valid packet.
 	//
