@@ -1434,7 +1434,7 @@ func TestDecode(t *testing.T) {
 		desc      string
 		inFlow    *otg.Flow
 		inPackets []gopacket.Packet
-		wantCount uint64 
+		wantCount uint64
 	}{{
 		desc: "matched packet",
 		inFlow: &otg.Flow{
@@ -1549,14 +1549,14 @@ func TestDecode(t *testing.T) {
 			for _, p := range tt.inPackets {
 				rxPacket(counters, hdrs, p)
 			}
-    
-      if counters.Rx == nil || counters.Rx.Pkts == nil {
-        if tt.wantCount == 0 {
-          return
-        }
-        t.Fatalf("rxPacket(): Rx counters not updated, got: nil")
-      }
-    
+
+			if counters.Rx == nil || counters.Rx.Pkts == nil {
+				if tt.wantCount == 0 {
+					return
+				}
+				t.Fatalf("rxPacket(): Rx counters not updated, got: nil")
+			}
+
 			if got, want := counters.Rx.Pkts.u, tt.wantCount; got != want {
 				t.Fatalf("rxPacket(): did not get expected count. got: %d, want: %d", got, want)
 			}
