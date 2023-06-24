@@ -23,6 +23,7 @@ import (
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"github.com/openconfig/magna/otgyang"
+	tcommon "github.com/openconfig/magna/telemetry/common"
 	"github.com/openconfig/ygot/ygot"
 	"k8s.io/klog"
 
@@ -37,6 +38,8 @@ var (
 const (
 	// defaultMPLSTTL is the TTL value used by default in the MPLS header.
 	defaultMPLSTTL uint8 = 64
+	// packetBytes is the number of bytes to read from an input packet.
+	packetBytes int = 1500
 )
 
 // headers returns the gopacket layers for the specified flow.
@@ -120,7 +123,7 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	}
 
 	// Append the marking layer for this flow.
-	src, dst := make([]byte, 6), make([]byte, 6)
+	src, dst := make([]byte, 4), make([]byte, 4)
 	if _, err := rand.Read(src); err != nil {
 		return nil, fmt.Errorf("cannot generate random source MAC, %v", err)
 	}
@@ -128,12 +131,18 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 		return nil, fmt.Errorf("cannot generate random dst MAC, %v", err)
 	}
 	klog.Infof("packet payload is from %v to %v", src, dst)
+	src[0], dst[0] = 10, 10
 
-	pktLayers = append(pktLayers, &layers.Ethernet{
-		SrcMAC:       net.HardwareAddr(src),
-		DstMAC:       net.HardwareAddr(dst),
-		EthernetType: layers.EthernetTypeLinkLayerDiscovery,
+	pktLayers = append(pktLayers, &layers.IPv4{
+		Version: 4,
+		SrcIP:   net.IP(src),
+		DstIP:   net.IP(dst),
 	})
+	pl := make([]byte, 64, 64)
+	if _, err := rand.Read(pl); err != nil {
+		return nil, fmt.Errorf("cannot generate random packet payload, %v", err)
+	}
+	pktLayers = append(pktLayers, gopacket.Payload(pl))
 
 	return pktLayers, nil
 }
@@ -142,6 +151,8 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 //   - a FlowGeneratorFn that is used in lwotg to create the MPLS flow.
 //   - a gnmit.Task that is used to write telemetry.
 func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
+	// TODO(robjs): We need a flow counter for each individual flow. This
+	// implementation results in just one flow being supported currently.
 	f := newFlowCounters()
 	// t is a gnmit Task which reads from the gnmi channel specified and writes
 	// into the cache.
@@ -156,7 +167,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 					<-ticker.C
 					for _, u := range f.telemetry() {
 						klog.Infof("sending telemetry update %s", u)
-						updateFn(u)
+						updateFn(tcommon.AddTarget(u, target))
 					}
 				}
 			}()
@@ -189,7 +200,10 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			klog.Infof("MPLSFlowHandler send function started.")
 
 			buf := gopacket.NewSerializeBuffer()
-			gopacket.SerializeLayers(buf, gopacket.SerializeOptions{}, hdrs...)
+			gopacket.SerializeLayers(buf, gopacket.SerializeOptions{
+				FixLengths:       true,
+				ComputeChecksums: true,
+			}, hdrs...)
 			size := len(buf.Bytes())
 
 			klog.Infof("MPLSFlowHandler Tx interface %s", tx)
@@ -225,7 +239,27 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 
 		recvFunc := func(stop chan struct{}) {
 			klog.Infof("MPLSFlowHandler receive function started on interface %s", rx)
-			handle, err := pcap.OpenLive(rx, 1500, true, pcapTimeout)
+			ih, err := pcap.NewInactiveHandle(rx)
+			if err != nil {
+				klog.Errorf("cannot create handle, err: %v", err)
+				return
+			}
+			defer ih.CleanUp()
+			if err := ih.SetImmediateMode(true); err != nil {
+				klog.Errorf("cannot set immediate mode on handle, err: %v", err)
+				return
+			}
+
+			if err := ih.SetPromisc(true); err != nil {
+				klog.Errorf("cannot set promiscous mode, err: %v", err)
+				return
+			}
+
+			if err := ih.SetSnapLen(packetBytes); err != nil {
+				klog.Errorf("cannot set packet length, err: %v", err)
+			}
+
+			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("MPLSFlowHandler Rx error: %v", err)
 				return
@@ -237,6 +271,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			for {
 				select {
 				case <-stop:
+					// TODO(robjs): zero the flow statistics/delete the flow
 					klog.Infof("MPLSFlowHandler Rx exiting on %s", rx)
 					return
 				case p := <-packetCh:
@@ -559,64 +594,32 @@ var (
 // rxPacket is called for each packet that is received. It takes arguments of the statitics
 // tracking the flow, the set of headers that are expected, and the received packet.
 func rxPacket(f *flowCounters, hdrs []gopacket.SerializableLayer, p gopacket.Packet) error {
-	match, err := packetInFlow(hdrs, p)
-	if err != nil {
-		return err
-	}
-	klog.Infof("MPLS flow: packet %s -> match? %v", p, match)
-	klog.Infof("MPLS flow: comparing to %v", hdrs)
-	if !match {
-		return nil
-	}
-	klog.Infof("MPLS flow: received packet with size %d", len(p.Data()))
+	go func() {
+		match, err := packetInFlow(hdrs, p)
+		if err != nil {
+			klog.Errorf("MPLS flow: packet flow parsing error, %v", err)
+		}
+		klog.Infof("MPLS flow: packet %s -> match? %v", p, match)
+		if !match {
+			return
+		}
+		klog.Infof("MPLS flow: received packet with size %d", len(p.Data()))
 
-	f.updateRx(timeFn(), len(p.Data()))
+		f.updateRx(timeFn(), len(p.Data()))
+	}()
 	return nil
 }
 
 func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) (bool, error) {
-	l := p.Layers()
-	inner := l[len(l)-1]
-	innerSpec := hdrs[len(hdrs)-1]
-	want, wantOK := inner.(*layers.Ethernet)
-	got, gotOK := innerSpec.(*layers.Ethernet)
-	if !wantOK || !gotOK {
-		klog.Infof("packet is not part of the flow, no Ethernet payload, wantOK: %v, gotOK: %v")
+	klog.Errorf("packet error layer: %v", p.ErrorLayer())
+	innerSpec := hdrs[len(hdrs)-2] // choose the IPv4 header
+	recv := p.Layer(layers.LayerTypeIPv4)
+	recvIP4, recvOK := recv.(*layers.IPv4)
+	spec, specOK := innerSpec.(*layers.IPv4)
+	if !specOK || !recvOK {
+		klog.Errorf("did not find IPv4 headers, specOK: %v, recvOK: %v", specOK, recvOK)
 		return false, nil
 	}
-	return reflect.DeepEqual(want.SrcMAC, want.DstMAC) && reflect.DeepEqual(got.SrcMAC, got.DstMAC), nil
-
-	/*for i, expected := range hdrs {
-		if len(p.Layers()) < i {
-			// We allow for the headers to be a partial match of the headers inside the packet.
-			continue
-		}
-		l := p.Layers()[i]
-		switch exp := expected.(type) {
-		case *layers.Ethernet:
-			got, ok := l.(*layers.Ethernet)
-			if !ok {
-				return false, nil
-			}
-			// We do not check source and destination MAC since they will be rewritten.
-			if got.EthernetType != exp.EthernetType || got.Length != exp.Length {
-				klog.Infof("packet was not for this flow, Ethernet did not match")
-				return false, nil
-			}
-		case *layers.MPLS:
-			got, ok := l.(*layers.MPLS)
-			if !ok {
-				return false, nil
-			}
-			if got.Label != exp.Label || got.TrafficClass != exp.TrafficClass || got.StackBottom != exp.StackBottom {
-				// Ignore TTL.
-				klog.Infof("packet was not for this flow, MPLS did not match")
-				return false, nil
-			}
-		default:
-			return false, fmt.Errorf("unknown layer type %s in packet", l.LayerType())
-		}
-	}
-	return true, nil
-	*/
+	klog.Infof("received IPv4 header is %v", recv)
+	return reflect.DeepEqual(recvIP4.SrcIP, spec.SrcIP) && reflect.DeepEqual(recvIP4.DstIP, spec.DstIP), nil
 }

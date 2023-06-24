@@ -1143,3 +1143,48 @@ func TestRxPacket(t *testing.T) {
 	}
 	timeFn = time.Now
 }
+
+func TestDecode(t *testing.T) {
+	mac := net.HardwareAddr{0, 1, 2, 3, 4, 5}
+	ip := net.IP{0, 1, 2, 3}
+	p := make([]byte, 64, 64)
+	pkt := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       uint32(42),
+			TTL:         42,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version:  4,
+			SrcIP:    ip,
+			DstIP:    ip,
+			Protocol: layers.IPProtocolTCP,
+		},
+		gopacket.Payload(p),
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
+
+	gopacket.SerializeLayers(buf, opts, pkt...)
+	simplePkt := buf.Bytes()
+	fmt.Printf("%v\n", simplePkt)
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Lazy)
+	ip4 := inSimple.Layer(layers.LayerTypeIPv4)
+	fmt.Printf("%#v\n", ip4)
+	fmt.Printf("%v\n", inSimple.ErrorLayer())
+
+	v, err := packetInFlow(pkt, inSimple)
+	if err != nil {
+		t.Fatalf("cannot check packet, %v", err)
+	}
+	fmt.Printf("in flow? %v\n", v)
+}
