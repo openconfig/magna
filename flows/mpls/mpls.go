@@ -37,8 +37,6 @@ var (
 const (
 	// defaultMPLSTTL is the TTL value used by default in the MPLS header.
 	defaultMPLSTTL uint8 = 64
-	// packetBytes is the number of bytes to read from an input packet.
-	packetBytes int = 1500
 )
 
 // headers returns the gopacket layers for the specified flow.
