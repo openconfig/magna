@@ -31,6 +31,8 @@ import (
 var (
 	// timeout specifies how long to wait for a PCAP handle.
 	pcapTimeout = 30 * time.Second
+	// packetBytes is the number of bytes to read from an input packet.
+	packetBytes int = 1500
 )
 
 const (
@@ -260,7 +262,27 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 
 		recvFunc := func(stop chan struct{}) {
 			klog.Infof("MPLSFlowHandler receive function started on interface %s", rx)
-			handle, err := pcap.OpenLive(rx, 9000, true, pcapTimeout)
+			ih, err := pcap.NewInactiveHandle(rx)
+			if err != nil {
+				klog.Errorf("cannot create handle, err: %v", err)
+				return
+			}
+			defer ih.CleanUp()
+			if err := ih.SetImmediateMode(true); err != nil {
+				klog.Errorf("cannot set immediate mode on handle, err: %v", err)
+				return
+			}
+
+			if err := ih.SetPromisc(true); err != nil {
+				klog.Errorf("cannot set promiscous mode, err: %v", err)
+				return
+			}
+
+			if err := ih.SetSnapLen(packetBytes); err != nil {
+				klog.Errorf("cannot set packet length, err: %v", err)
+			}
+
+			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("MPLSFlowHandler Rx error: %v", err)
 				return
