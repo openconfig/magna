@@ -261,7 +261,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 
 		recvFunc := func(stop chan struct{}) {
 			klog.Infof("MPLSFlowHandler receive function started on interface %s", rx)
-      handle, err := pcap.OpenLive(rx, 9000, true, pcapTimeout)
+			handle, err := pcap.OpenLive(rx, 9000, true, pcapTimeout)
 			if err != nil {
 				klog.Errorf("MPLSFlowHandler Rx error: %v", err)
 				return
