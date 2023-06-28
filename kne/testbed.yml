@@ -1,5 +1,0 @@
-username: admin
-password: admin
-# TODO: replace with the path to the topology to be used, and the KNE CLI.
-topology:
-cli:

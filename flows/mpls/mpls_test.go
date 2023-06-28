@@ -18,24 +18,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var (
+	v4Choice       = otg.FlowHeader_Choice_ipv4
+	v6Choice       = otg.FlowHeader_Choice_ipv6
+	mplsChoice     = otg.FlowHeader_Choice_mpls
+	ethernetChoice = otg.FlowHeader_Choice_ethernet
+
+	dstMACValue  = otg.PatternFlowEthernetDst_Choice_value
+	dstMACValues = otg.PatternFlowEthernetDst_Choice_values
+
+	srcMACValue  = otg.PatternFlowEthernetSrc_Choice_value
+	srcMACValues = otg.PatternFlowEthernetSrc_Choice_values
+
+	mplsTTLValue    = otg.PatternFlowMplsTimeToLive_Choice_value
+	mplsTTLValues   = otg.PatternFlowMplsTimeToLive_Choice_values
+	mplsBOSValue    = otg.PatternFlowMplsBottomOfStack_Choice_value
+	mplsBOSValues   = otg.PatternFlowMplsBottomOfStack_Choice_values
+	mplsLabelValue  = otg.PatternFlowMplsLabel_Choice_value
+	mplsLabelValues = otg.PatternFlowMplsLabel_Choice_values
+
+	dstIPValue      = otg.PatternFlowIpv4Dst_Choice_value
+	dstIPValues     = otg.PatternFlowIpv4Dst_Choice_values
+	srcIPValue      = otg.PatternFlowIpv4Src_Choice_value
+	srcIPValues     = otg.PatternFlowIpv4Src_Choice_values
+	ipVersionValue  = otg.PatternFlowIpv4Version_Choice_value
+	ipVersionValues = otg.PatternFlowIpv4Version_Choice_values
+)
+
 func TestHeaders(t *testing.T) {
-	v4Choice := otg.FlowHeader_Choice_ipv4
-	mplsChoice := otg.FlowHeader_Choice_mpls
-	ethernetChoice := otg.FlowHeader_Choice_ethernet
-
-	dstMACValue := otg.PatternFlowEthernetDst_Choice_value
-	dstMACValues := otg.PatternFlowEthernetDst_Choice_values
-
-	srcMACValue := otg.PatternFlowEthernetSrc_Choice_value
-	srcMACValues := otg.PatternFlowEthernetSrc_Choice_values
-
-	mplsTTLValue := otg.PatternFlowMplsTimeToLive_Choice_value
-	mplsTTLValues := otg.PatternFlowMplsTimeToLive_Choice_values
-	mplsBOSValue := otg.PatternFlowMplsBottomOfStack_Choice_value
-	mplsBOSValues := otg.PatternFlowMplsBottomOfStack_Choice_values
-	mplsLabelValue := otg.PatternFlowMplsLabel_Choice_value
-	mplsLabelValues := otg.PatternFlowMplsLabel_Choice_values
-
 	validMAC, err := net.ParseMAC("00:01:02:03:04:05")
 	if err != nil {
 		t.Fatalf("cannot parse MAC, %v", err)
@@ -54,7 +64,7 @@ func TestHeaders(t *testing.T) {
 		desc: "non-ethernet or mpls layer",
 		inFlow: &otg.Flow{
 			Packet: []*otg.FlowHeader{{
-				Choice: &v4Choice,
+				Choice: &v6Choice,
 			}},
 		},
 		wantErr: true,
@@ -350,6 +360,269 @@ func TestHeaders(t *testing.T) {
 				TTL:         defaultMPLSTTL,
 			},
 		},
+	}, {
+		desc: "ipv4 in MPLS - valid",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValue,
+						Value:  proto.String("1.1.1.1"),
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValue,
+						Value:  proto.String("2.2.2.2"),
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValue,
+						Value:  proto.Int32(4),
+					},
+				},
+			}},
+		},
+		wantLayers: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       validMAC,
+				DstMAC:       validMAC,
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.MPLS{
+				Label:       42,
+				StackBottom: true,
+				TTL:         2,
+			},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.1.1.1"),
+				DstIP:   net.ParseIP("2.2.2.2"),
+			},
+		},
+	}, {
+		desc: "ipv4 in MPLS - invalid source type",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValues,
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValue,
+						Value:  proto.String("2.2.2.2"),
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValue,
+						Value:  proto.Int32(4),
+					},
+				},
+			}},
+		},
+		wantErr: true,
+	}, {
+		desc: "ipv4 in MPLS - invalid destination type",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValue,
+						Value:  proto.String("1.1.1.1"),
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValues,
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValue,
+						Value:  proto.Int32(4),
+					},
+				},
+			}},
+		},
+		wantErr: true,
+	}, {
+		desc: "ipv4 in MPLS - invalid version",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValue,
+						Value:  proto.String("1.1.1.1"),
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValue,
+						Value:  proto.String("2.2.2.2"),
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValues,
+					},
+				},
+			}},
+		},
+		wantErr: true,
+	}, {
+		desc: "ipv4 in MPLS - invalid specific version",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValue,
+						Value:  proto.String("1.1.1.1"),
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValue,
+						Value:  proto.String("2.2.2.2"),
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValue,
+						Value:  proto.Int32(42),
+					},
+				},
+			}},
+		},
+		wantErr: true,
 	}}
 
 	for _, tt := range tests {
@@ -358,7 +631,11 @@ func TestHeaders(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("did not get expected error, got: %v, wantErr? %v", err, tt.wantErr)
 			}
-			if diff := cmp.Diff(got, tt.wantLayers, cmpopts.EquateEmpty()); diff != "" {
+			if len(got) < 2 {
+				return
+			}
+			// Skip the 64-byte random payload.
+			if diff := cmp.Diff(got[0:len(got)-1], tt.wantLayers, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("did not get expected layers, diff(-got,+want):\n%s", diff)
 			}
 		})
@@ -813,6 +1090,475 @@ func TestTelemetry(t *testing.T) {
 			if got := tt.in.telemetry(); !testutil.NotificationSetEqual(got, tt.want) {
 
 				t.Fatalf("did not get expected set of notifications, got: \n%s\nwant:\n%s", shortNoti(got), shortNoti(tt.want))
+			}
+		})
+	}
+}
+
+func TestPacketInFlow(t *testing.T) {
+
+	mac, err := net.ParseMAC("16:61:ee:09:bc:dc")
+	if err != nil {
+		t.Fatalf("cannot parse MAC, %v", err)
+	}
+
+	simplePacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version: 4,
+			SrcIP:   net.ParseIP("1.1.1.1"),
+			DstIP:   net.ParseIP("2.2.2.2"),
+		},
+	}
+
+	stackedPacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: false,
+		},
+		&layers.MPLS{
+			Label:       44,
+			TTL:         200,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version: 4,
+			SrcIP:   net.ParseIP("1.2.3.4"),
+			DstIP:   net.ParseIP("2.3.4.5"),
+		},
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		ComputeChecksums: true,
+		FixLengths:       true,
+	}
+
+	gopacket.SerializeLayers(buf, opts, simplePacket...)
+	simplePkt := buf.Bytes()
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	gopacket.SerializeLayers(buf, opts, stackedPacket...)
+	stackedPkt := buf.Bytes()
+	inStacked := gopacket.NewPacket(stackedPkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	tests := []struct {
+		desc      string
+		inHeaders []gopacket.SerializableLayer
+		inPacket  gopacket.Packet
+		want      bool
+		wantErr   bool
+	}{{
+		desc: "not in flow, not enough headers in spec",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC: mac,
+				DstMAC: mac,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "not in flow, no ipv4 header in spec",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "in flow, matching ipv4 header",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.1.1.1"),
+				DstIP:   net.ParseIP("2.2.2.2"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inSimple,
+		want:     true,
+	}, {
+		desc: "not in flow, no matching ipv4 header",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.1.1.1"),
+				DstIP:   net.ParseIP("100.100.100.100"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "in flow, stacked packet",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("2.3.4.5"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inStacked,
+		want:     true,
+	}, {
+		desc: "not in flow, stacked packet",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("1.2.3.5"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inStacked,
+		want:     false,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got := packetInFlow(tt.inHeaders, tt.inPacket)
+			if got != tt.want {
+				t.Fatalf("packetInFlow(hdrs, packet): didn't get expected result, got: %v, want: %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRxPacket(t *testing.T) {
+	simplePacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       net.HardwareAddr{0, 0, 0, 0, 0, 0},
+			DstMAC:       net.HardwareAddr{1, 2, 3, 4, 5, 6},
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version: 4,
+			SrcIP:   net.ParseIP("1.2.3.4"),
+			DstIP:   net.ParseIP("2.3.4.5"),
+		},
+		gopacket.Payload([]byte{1, 2, 3, 4}),
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
+
+	gopacket.SerializeLayers(buf, opts, simplePacket...)
+	simplePkt := buf.Bytes()
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	fixedTimeFn := func() time.Time { return time.Date(2023, 06, 12, 10, 00, 00, 00, time.UTC) }
+
+	type packetWithTime struct {
+		timeFn func() time.Time
+		packet gopacket.Packet
+	}
+
+	tests := []struct {
+		desc         string
+		inCounters   *flowCounters
+		inHeaders    []gopacket.SerializableLayer
+		inPackets    []packetWithTime
+		wantCounters *flowCounters
+	}{{
+		desc:       "matched increments empty counters",
+		inCounters: newFlowCounters(),
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("2.3.4.5"),
+			},
+			gopacket.Payload([]byte{2, 3, 4, 5}),
+		},
+		inPackets: []packetWithTime{{
+			timeFn: fixedTimeFn,
+			packet: inSimple,
+		}},
+		wantCounters: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 1686564000000000000, u: 60},
+				Pkts:   &val{ts: 1686564000000000000, u: 1},
+			},
+			Timeseries: map[int64]int{1686564000: 60},
+		},
+	}, {
+		desc:       "matched - two packets",
+		inCounters: newFlowCounters(),
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC:       net.HardwareAddr{0, 0, 0, 0, 0, 0},
+				DstMAC:       net.HardwareAddr{1, 2, 3, 4, 5, 6},
+				EthernetType: layers.EthernetTypeMPLSUnicast,
+			},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("2.3.4.5"),
+			},
+			gopacket.Payload([]byte{4, 5, 6, 7}),
+		},
+		inPackets: []packetWithTime{{
+			timeFn: fixedTimeFn,
+			packet: inSimple,
+		}, {
+			timeFn: func() time.Time { return time.Date(2023, 06, 12, 10, 00, 01, 00, time.UTC) },
+			packet: inSimple,
+		}},
+		wantCounters: &flowCounters{
+			Tx: &stats{},
+			Rx: &stats{
+				Octets: &val{ts: 1686564001000000000, u: 120},
+				Pkts:   &val{ts: 1686564001000000000, u: 2},
+			},
+			Timeseries: map[int64]int{
+				1686564000: 60,
+				1686564001: 60,
+			},
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			for _, p := range tt.inPackets {
+				timeFn = p.timeFn
+				rxPacket(tt.inCounters, tt.inHeaders, p.packet)
+			}
+			if diff := cmp.Diff(tt.inCounters, tt.wantCounters, cmpopts.IgnoreUnexported(stats{}), cmp.AllowUnexported(val{}), cmpopts.IgnoreUnexported(flowCounters{})); diff != "" {
+				t.Fatalf("did not get expected counters, diff(-got,+want):\n%s", diff)
+			}
+		})
+	}
+	timeFn = time.Now
+}
+
+func TestDecode(t *testing.T) {
+
+	mac := net.HardwareAddr{0, 1, 2, 3, 4, 5}
+	p := make([]byte, 64)
+	pkt := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       uint32(42),
+			TTL:         42,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version:  4,
+			SrcIP:    net.ParseIP("1.1.1.1"),
+			DstIP:    net.ParseIP("2.2.2.2"),
+			Protocol: layers.IPProtocolTCP,
+		},
+		gopacket.Payload(p),
+	}
+
+	noMatchIP := net.IP{1, 2, 3, 4}
+	pktTwo := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       uint32(42),
+			TTL:         42,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version:  4,
+			SrcIP:    noMatchIP,
+			DstIP:    noMatchIP,
+			Protocol: layers.IPProtocolTCP,
+		},
+		gopacket.Payload(p),
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
+	gopacket.SerializeLayers(buf, opts, pkt...)
+	simplePkt := buf.Bytes()
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	gopacket.SerializeLayers(buf, opts, pktTwo...)
+	noMatchPkt := buf.Bytes()
+	inNoMatch := gopacket.NewPacket(noMatchPkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	tests := []struct {
+		desc      string
+		inFlow    *otg.Flow
+		inPackets []gopacket.Packet
+		wantCount uint64
+	}{{
+		desc: "matched packet",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValue,
+						Value:  proto.String("1.1.1.1"),
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValue,
+						Value:  proto.String("2.2.2.2"),
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValue,
+						Value:  proto.Int32(4),
+					},
+				},
+			}},
+		},
+		inPackets: []gopacket.Packet{inSimple},
+		wantCount: 1,
+	}, {
+		desc: "unmatched packet",
+		inFlow: &otg.Flow{
+			Packet: []*otg.FlowHeader{{
+				Choice: &ethernetChoice,
+				Ethernet: &otg.FlowEthernet{
+					Dst: &otg.PatternFlowEthernetDst{
+						Choice: &dstMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+					Src: &otg.PatternFlowEthernetSrc{
+						Choice: &srcMACValue,
+						Value:  proto.String("00:01:02:03:04:05"),
+					},
+				},
+			}, {
+				Choice: &mplsChoice,
+				Mpls: &otg.FlowMpls{
+					Label: &otg.PatternFlowMplsLabel{
+						Choice: &mplsLabelValue,
+						Value:  proto.Int32(42),
+					},
+					TimeToLive: &otg.PatternFlowMplsTimeToLive{
+						Choice: &mplsTTLValue,
+						Value:  proto.Int32(2),
+					},
+					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
+						Choice: &mplsBOSValue,
+						Value:  proto.Int32(1),
+					},
+				},
+			}, {
+				Choice: &v4Choice,
+				Ipv4: &otg.FlowIpv4{
+					Src: &otg.PatternFlowIpv4Src{
+						Choice: &srcIPValue,
+						Value:  proto.String("1.1.1.1"),
+					},
+					Dst: &otg.PatternFlowIpv4Dst{
+						Choice: &dstIPValue,
+						Value:  proto.String("2.2.2.2"),
+					},
+					Version: &otg.PatternFlowIpv4Version{
+						Choice: &ipVersionValue,
+						Value:  proto.Int32(4),
+					},
+				},
+			}},
+		},
+		inPackets: []gopacket.Packet{inNoMatch},
+		wantCount: 0,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			counters := newFlowCounters()
+			hdrs, err := headers(tt.inFlow)
+			if err != nil {
+				t.Fatalf("headers(): cannot parse, err: %v", err)
+			}
+			for _, p := range tt.inPackets {
+				rxPacket(counters, hdrs, p)
+			}
+
+			if counters.Rx == nil || counters.Rx.Pkts == nil {
+				if tt.wantCount == 0 {
+					return
+				}
+				t.Fatalf("rxPacket(): Rx counters not updated, got: nil")
+			}
+
+			if got, want := counters.Rx.Pkts.u, tt.wantCount; got != want {
+				t.Fatalf("rxPacket(): did not get expected count. got: %d, want: %d", got, want)
 			}
 		})
 	}
