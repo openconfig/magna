@@ -135,9 +135,11 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				// to exit.
 				defer cleanup()
 				for {
-					<-ticker.C
-					for _, u := range f.telemetry() {
-						updateFn(u)
+					select {
+					case <-ticker.C:
+						for _, u := range f.telemetry() {
+							updateFn(u)
+						}
 					}
 				}
 			}()
