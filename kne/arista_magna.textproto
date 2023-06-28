@@ -1,7 +1,8 @@
 name: "arista-magna"
 nodes: {
   name: "ate"
-  vendor: MAGNA
+  vendor: OPENCONFIG
+  model: "MAGNA"
   config: {
     image: "magna:latest"
     command: "/app/magna"

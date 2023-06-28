@@ -5,11 +5,11 @@
 package mpls
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"net"
-	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -43,6 +43,7 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	var (
 		ethernet *otg.FlowHeader
 		mpls     []*otg.FlowHeader
+		ip4      *otg.FlowHeader
 	)
 
 	// This package only handles MPLS packets, and there are restrictions on this. Thus we check
@@ -56,6 +57,11 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 			ethernet = layer
 		case otg.FlowHeader_Choice_mpls:
 			mpls = append(mpls, layer)
+		case otg.FlowHeader_Choice_ipv4:
+			if len(mpls) == 0 || ip4 != nil {
+				return nil, fmt.Errorf("multiple IPv4, or outer IPv4 layers not handled by MPLS plugin")
+			}
+			ip4 = layer
 		default:
 			return nil, fmt.Errorf("MPLS does not handle layer %s", t)
 		}
@@ -118,6 +124,45 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 		pktLayers = append(pktLayers, ll)
 	}
 
+	if ip4 != nil {
+
+		if dstT := ip4.GetIpv4().GetDst().GetChoice(); dstT != otg.PatternFlowIpv4Dst_Choice_value {
+			return nil, fmt.Errorf("simple MPLS does not handle non-explicit destination IP, got: %s", dstT)
+		}
+		if srcT := ip4.GetIpv4().GetSrc().GetChoice(); srcT != otg.PatternFlowIpv4Src_Choice_value {
+			return nil, fmt.Errorf("simple MPLS does not handle non-explicit src IP, got: %s", srcT)
+		}
+
+		srcIP := net.ParseIP(ip4.GetIpv4().GetSrc().GetValue())
+		if srcIP == nil {
+			return nil, fmt.Errorf("error parsing source IPv4 address, got: %s", ip4.GetIpv4().GetSrc().GetValue())
+		}
+		dstIP := net.ParseIP(ip4.GetIpv4().GetDst().GetValue())
+		if dstIP == nil {
+			return nil, fmt.Errorf("error parsing destination IPv4 address, got: %s", ip4.GetIpv4().GetDst().GetValue())
+		}
+
+		if vv, vT := ip4.GetIpv4().GetVersion().GetValue(), ip4.GetIpv4().GetVersion().GetChoice(); vT != otg.PatternFlowIpv4Version_Choice_value || vv != 4 {
+			return nil, fmt.Errorf("error parsing IP version, got type: %s, got: %d", vT, vv)
+		}
+
+		pktLayers = append(pktLayers, &layers.IPv4{
+			SrcIP:   srcIP,
+			DstIP:   dstIP,
+			Version: 4,
+		})
+	}
+
+	// Build a packet payload consisting of 64-bytes to ensure that we have a
+	// valid packet.
+	//
+	// TODO(robjs): In the future, this could be read from the OTG flow input.
+	pl := make([]byte, 64)
+	if _, err := rand.Read(pl); err != nil {
+		return nil, fmt.Errorf("cannot generate random packet payload, %v", err)
+	}
+	pktLayers = append(pktLayers, gopacket.Payload(pl))
+
 	return pktLayers, nil
 }
 
@@ -125,6 +170,8 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 //   - a FlowGeneratorFn that is used in lwotg to create the MPLS flow.
 //   - a gnmit.Task that is used to write telemetry.
 func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
+	// TODO(robjs): We need a flow counter for each individual flow. This
+	// implementation results in just one flow being supported currently.
 	f := newFlowCounters()
 	// t is a gnmit Task which reads from the gnmi channel specified and writes
 	// into the cache.
@@ -139,6 +186,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 					select {
 					case <-ticker.C:
 						for _, u := range f.telemetry() {
+							klog.Infof("sending telemetry update %s", u)
 							updateFn(u)
 						}
 					}
@@ -173,11 +221,14 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			klog.Infof("MPLSFlowHandler send function started.")
 
 			buf := gopacket.NewSerializeBuffer()
-			gopacket.SerializeLayers(buf, gopacket.SerializeOptions{}, hdrs...)
+			gopacket.SerializeLayers(buf, gopacket.SerializeOptions{
+				FixLengths:       true,
+				ComputeChecksums: true,
+			}, hdrs...)
 			size := len(buf.Bytes())
 
 			klog.Infof("MPLSFlowHandler Tx interface %s", tx)
-			handle, err := pcap.OpenLive(tx, 9000, true, pcapTimeout)
+			handle, err := pcap.OpenLive(tx, 1500, true, pcapTimeout)
 			if err != nil {
 				klog.Errorf("MPLSFlowHandler Tx error: %v", err)
 				return
@@ -221,6 +272,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			for {
 				select {
 				case <-stop:
+					// TODO(robjs): zero the flow statistics/delete the flow
 					klog.Infof("MPLSFlowHandler Rx exiting on %s", rx)
 					return
 				case p := <-packetCh:
@@ -331,6 +383,9 @@ func (f *flowCounters) updateRx(ts time.Time, size int) {
 func (f *flowCounters) setTransmit(state bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.Transmit == nil {
+		f.Transmit = &val{}
+	}
 	f.Transmit.b = state
 	f.Transmit.ts = time.Now().UnixNano()
 }
@@ -540,50 +595,33 @@ var (
 // rxPacket is called for each packet that is received. It takes arguments of the statitics
 // tracking the flow, the set of headers that are expected, and the received packet.
 func rxPacket(f *flowCounters, hdrs []gopacket.SerializableLayer, p gopacket.Packet) error {
-	match, err := packetInFlow(hdrs, p)
-	if err != nil {
-		return err
-	}
+	match := packetInFlow(hdrs, p)
+	klog.Infof("MPLS flow: packet %s -> match? %v", p, match)
 	if !match {
 		return nil
 	}
+	klog.Infof("MPLS flow: received packet with size %d", len(p.Data()))
 
 	f.updateRx(timeFn(), len(p.Data()))
 	return nil
 }
 
-// packetinFlow determines whether the packet, p, matches the headers specified in hdrs. A partial match is
-// allowed. That is to say hdrs can partially specify the headers that are present within p. It returns a
-// bool indicating whether the packet matches, and an error if it is unable to examine the packet (e.g.,
-// if an unexpected layer is found).
-func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) (bool, error) {
-	for i, expected := range hdrs {
-		if len(p.Layers()) < i {
-			// We allow for the headers to be a partial match of the headers inside the packet.
-			continue
-		}
-		l := p.Layers()[i]
-		switch exp := expected.(type) {
-		case *layers.Ethernet:
-			got, ok := l.(*layers.Ethernet)
-			if !ok {
-				return false, nil
-			}
-			if !reflect.DeepEqual(got.SrcMAC, exp.SrcMAC) || !reflect.DeepEqual(got.DstMAC, exp.DstMAC) || got.EthernetType != exp.EthernetType || got.Length != exp.Length {
-				return false, nil
-			}
-		case *layers.MPLS:
-			got, ok := l.(*layers.MPLS)
-			if !ok {
-				return false, nil
-			}
-			if got.Label != exp.Label || got.TrafficClass != exp.TrafficClass || got.StackBottom != exp.StackBottom {
-				// Ignore TTL.
-				return false, nil
-			}
-		default:
-			return false, fmt.Errorf("unknown layer type %s in packet", l.LayerType())
-		}
+// packetInFlow checks whether the packet p matches the specification in hdrs by checking
+// the inner IPv4 header in p matches the inner IP header in hdrs. The values of other
+// headers are not checked.
+func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) bool {
+	if len(hdrs) < 2 {
+		return false
 	}
-	return true, nil
+
+	innerSpec := hdrs[len(hdrs)-2] // choose the IPv4 header
+	recv := p.Layer(layers.LayerTypeIPv4)
+	recvIP4, recvOK := recv.(*layers.IPv4)
+	spec, specOK := innerSpec.(*layers.IPv4)
+	if !specOK || !recvOK {
+		klog.Errorf("did not find IPv4 headers, specOK: %v, recvOK: %v", specOK, recvOK)
+		return false
+	}
+	klog.Infof("received IPv4 header is %v", recv)
+	return recvIP4.SrcIP.Equal(spec.SrcIP) && recvIP4.DstIP.Equal(spec.DstIP)
 }
