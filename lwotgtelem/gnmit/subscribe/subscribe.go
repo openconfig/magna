@@ -15,7 +15,12 @@ limitations under the License.
 */
 
 // Package subscribe implements the gnmi.proto Subscribe service API.
-// This is a forked version of github.com/openconfig/gnmi's subscribe package.
+// This is a forked version of github.com/openconfig/gnmi's subscribe package
+// to add a means to have local (non-network) subscribers to the cache, as well
+// as host a specific set of "tasks" that produce that telemetry information.
+// It requires internal access to the cache - which exposes the upstream
+// implementation to new public APIs, and hence we make these changes in
+// this forked copy.
 package subscribe
 
 import (
@@ -242,7 +247,7 @@ func (s *Server) SubscribeLocal(target string, paths []*pb.Path, prefix *pb.Path
 	}
 
 	log.Infof("target: %q SubscribeLocal start: %s", target, paths)
-	defer log.Infof("target %q SubscribeLocal start: end: %q", target, paths)
+	defer log.Infof("target %q SubscribeLocal end: %q", target, paths)
 
 	queue := coalesce.NewQueue()
 

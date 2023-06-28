@@ -55,7 +55,11 @@ func periodic(period time.Duration, fn func()) {
 
 // Queue is an interface that represents a possibly coalescing queue of updates.
 type Queue interface {
-	Next(ctx context.Context) (interface{}, uint32, error)
+	// Next returns a potential update to be sent, along with a count of duplicates
+	// and any error that occurs. The update to be sent is reflected as an any
+	// as it can be a leaf (*ctree.Leaf), a sync_response marker, and can be
+	// extended in the future.
+	Next(ctx context.Context) (any, uint32, error)
 	Len() int
 	Close()
 }
