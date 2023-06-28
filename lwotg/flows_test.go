@@ -94,12 +94,15 @@ func TestStartStopTraffic(t *testing.T) {
 		dataMu sync.Mutex
 		wg     sync.WaitGroup
 	)
+
 	data := []string{}
+
 	addData := func(s string) {
 		dataMu.Lock()
 		defer dataMu.Unlock()
 		data = append(data, s)
 	}
+
 	tests := []struct {
 		desc                string
 		inTrafficGenerators []TXRXFn
@@ -136,7 +139,6 @@ func TestStartStopTraffic(t *testing.T) {
 					addData("exit-rx0")
 					wg.Done()
 				}()
-				wg.Wait()
 			},
 			func(tx, rx *FlowController) {
 				wg.Add(2)
@@ -152,7 +154,6 @@ func TestStartStopTraffic(t *testing.T) {
 					addData("exit-rx1")
 					wg.Done()
 				}()
-				wg.Wait()
 			},
 		},
 		wantData: []string{
