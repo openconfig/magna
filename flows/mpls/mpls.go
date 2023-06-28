@@ -185,12 +185,10 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				// to exit.
 				defer cleanup()
 				for {
-					select {
-					case <-ticker.C:
-						for _, u := range f.telemetry() {
-							klog.Infof("sending telemetry update %s", u)
-							updateFn(u)
-						}
+					<-ticker.C
+					for _, u := range f.telemetry() {
+						klog.Infof("sending telemetry update %s", u)
+						updateFn(u)
 					}
 				}
 			}()
