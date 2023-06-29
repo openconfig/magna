@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/openconfig/lemming/gnmi/gnmit"
 	"github.com/openconfig/magna/lwotg"
+	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"github.com/openconfig/ygot/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

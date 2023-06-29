@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/openconfig/lemming/gnmi/gnmit"
 	"github.com/openconfig/magna/lwotg"
+	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"k8s.io/klog"
 )
 

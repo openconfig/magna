@@ -42,9 +42,7 @@ func init() {
 
 // netlinkAccessor implements the NetworkAccessor interface for a Linux
 // system.
-type netlinkAccessor struct {
-	unimplementedAccessor
-}
+type netlinkAccessor struct{}
 
 // Interface retrieves the interface named from the underlying system
 // through making a netlink call.
