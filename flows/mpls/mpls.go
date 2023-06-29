@@ -410,6 +410,17 @@ func (f *flowCounters) setTransmit(state bool) {
 	f.Transmit.ts = time.Now().UnixNano()
 }
 
+func (f *flowCounters) clearStats() {
+	f.Tx.mu.Lock()
+	defer f.Tx.mu.Unlock()
+
+	f.Rx.mu.Lock()
+	defer f.Rx.mu.Unlock()
+
+	f.Tx = &stats{}
+	f.Rx = &stats{}
+}
+
 // lossPct calculates the percentage loss that the flow has experienced.
 func (f *flowCounters) lossPct() float32 {
 	f.Tx.mu.Lock()
