@@ -22,6 +22,7 @@ import (
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
 	"github.com/openconfig/magna/otgyang"
+	tcommon "github.com/openconfig/magna/telemetry/common"
 	"github.com/openconfig/ygot/ygot"
 	"k8s.io/klog"
 
@@ -186,7 +187,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				defer cleanup()
 				for {
 					<-ticker.C
-					for _, u := range f.telemetry() {
+					for _, u := range f.telemetry(target) {
 						klog.Infof("sending telemetry update %s", u)
 						updateFn(u)
 					}
@@ -461,7 +462,8 @@ func (f *flowCounters) rxRate() float32 {
 }
 
 // telemetry generates the set of gNMI Notifications that describes the flow's current state.
-func (f *flowCounters) telemetry() []*gpb.Notification {
+// The target argument specifies the Target value that should be included in the notifications.
+func (f *flowCounters) telemetry(target string) []*gpb.Notification {
 	type datapoint struct {
 		d  *otgyang.Device
 		ts int64
@@ -556,7 +558,7 @@ func (f *flowCounters) telemetry() []*gpb.Notification {
 					}
 					nn.Update = append(nn.Update, u)
 				}
-				notis = append(notis, nn)
+				notis = append(notis, tcommon.AddTarget(nn, target))
 			}
 		}
 	}
@@ -567,7 +569,9 @@ func (f *flowCounters) telemetry() []*gpb.Notification {
 	if err != nil {
 		klog.Errorf("cannot render name notification, got err: %v", err)
 	}
-	notis = append(notis, n...)
+	for _, u := range n {
+		notis = append(notis, tcommon.AddTarget(u, target))
+	}
 
 	return notis
 }
