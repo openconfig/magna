@@ -3,6 +3,8 @@ package simple_ondatra_test
 import (
 	"flag"
 	"fmt"
+	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -10,6 +12,10 @@ import (
 	"github.com/openconfig/featureprofiles/topologies/binding"
 	"github.com/openconfig/ondatra"
 	"github.com/openconfig/ondatra/gnmi"
+	"github.com/openconfig/ondatra/knebind/solver"
+
+	tpb "github.com/openconfig/kne/proto/topo"
+	mpb "github.com/openconfig/magna/proto/mirror"
 )
 
 const (
@@ -82,6 +88,23 @@ func pushBaseConfigs(t *testing.T, ate *ondatra.ATEDevice) gosnappi.Config {
 	}
 
 	return otgCfg
+}
+
+func TestDUT(t *testing.T) {
+	ate := ondatra.ATE(t, "ate")
+	sr := &mpb.StartRequest{
+		From: ate.Port(t, "port1").Name(),
+		To:   ate.Port(t, "port2").Name(),
+	}
+
+	dut := ondatra.DUT(t, "mirror")
+	data := dut.CustomData(solver.KNEServiceMapKey).(map[string]*tpb.Service)
+	m := data["mirror-controller"]
+	if m == nil {
+		t.Fatalf("cannot find mirror data, got: %v", data)
+	}
+	mirrorAddr := net.JoinHostPort(m.GetOutsideIp(), strconv.Itoa(int(m.GetOutside())))
+	fmt.Printf("send %s to %s\n", sr, mirrorAddr)
 }
 
 // TestMPLS is a simple test that creates an MPLS flow between two ATE ports and
