@@ -46,10 +46,10 @@ nodes {
     args: "-to=eth2"
   }
   services: {
-    key: 22
+    key: 4364
     value: {
-      name: "ssh"
-      inside: 22
+      name: "mirror-controller"
+      inside: 4364
     }
   }
 }

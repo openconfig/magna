@@ -10,8 +10,6 @@ import (
 	"github.com/openconfig/featureprofiles/topologies/binding"
 	"github.com/openconfig/ondatra"
 	"github.com/openconfig/ondatra/gnmi"
-
-	mpb "github.com/openconfig/magna/proto/mirror"
 )
 
 const (
@@ -90,17 +88,6 @@ func pushBaseConfigs(t *testing.T, ate *ondatra.ATEDevice) gosnappi.Config {
 // checks that there is no packet loss. It validates magna's end-to-end MPLS
 // flow accounting.
 func TestMPLS(t *testing.T) {
-	ate := ondatra.ATE(t, "ate")
-	sr := &mpb.StartRequest{
-		From: ate.Port(t, "port1").Name(),
-		To:   ate.Port(t, "port2").Name(),
-	}
-
-	dut := ondatra.DUT(t, "mirror")
-	_ = dut
-
-	fmt.Printf("%s\n", sr)
-
 	otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
 
 	otg := ondatra.ATE(t, "ate").OTG()
