@@ -947,7 +947,7 @@ type updSpec struct {
 	val  any
 }
 
-func mustNoti(t *testing.T, ts int64, upd ...updSpec) *gpb.Notification {
+func mustNoti(t *testing.T, target string, ts int64, upd ...updSpec) *gpb.Notification {
 	t.Helper()
 
 	updates := []*gpb.Update{}
@@ -972,6 +972,10 @@ func mustNoti(t *testing.T, ts int64, upd ...updSpec) *gpb.Notification {
 	}
 
 	return &gpb.Notification{
+		Prefix: &gpb.Path{
+			Origin: "openconfig",
+			Target: target,
+		},
 		Timestamp: ts,
 		Update:    updates,
 	}
@@ -979,9 +983,10 @@ func mustNoti(t *testing.T, ts int64, upd ...updSpec) *gpb.Notification {
 
 func TestTelemetry(t *testing.T) {
 	tests := []struct {
-		desc string
-		in   *flowCounters
-		want []*gpb.Notification
+		desc     string
+		in       *flowCounters
+		inTarget string
+		want     []*gpb.Notification
 	}{{
 		desc: "empty input",
 		in:   newFlowCounters(),
@@ -996,14 +1001,15 @@ func TestTelemetry(t *testing.T) {
 			},
 			Transmit: &val{ts: 120, b: true},
 		},
+		inTarget: "dut",
 		want: []*gpb.Notification{
-			mustNoti(t, 1,
+			mustNoti(t, "dut", 1,
 				updSpec{path: "/flows/flow[name=flow_one]/name", val: "flow_one"},
 				updSpec{path: "/flows/flow[name=flow_one]/state/name", val: "flow_one"}),
-			mustNoti(t, 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-pkts", val: uint64(100)}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-octets", val: uint64(800)}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/out-rate", val: []byte{0, 0, 250, 69}}),
+			mustNoti(t, "dut", 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
+			mustNoti(t, "dut", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-pkts", val: uint64(100)}),
+			mustNoti(t, "dut", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-octets", val: uint64(800)}),
+			mustNoti(t, "dut", 100, updSpec{path: "/flows/flow[name=flow_one]/state/out-rate", val: []byte{0, 0, 250, 69}}),
 		},
 	}, {
 		desc: "rx statistics",
@@ -1015,14 +1021,15 @@ func TestTelemetry(t *testing.T) {
 			},
 			Transmit: &val{ts: 120, b: true},
 		},
+		inTarget: "dut",
 		want: []*gpb.Notification{
-			mustNoti(t, 1,
+			mustNoti(t, "dut", 1,
 				updSpec{path: "/flows/flow[name=flow_one]/name", val: "flow_one"},
 				updSpec{path: "/flows/flow[name=flow_one]/state/name", val: "flow_one"}),
-			mustNoti(t, 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-pkts", val: uint64(100)}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-octets", val: uint64(800)}),
-			mustNoti(t, 42, updSpec{path: "/flows/flow[name=flow_one]/state/in-rate", val: []byte{0, 0, 0, 0}}),
+			mustNoti(t, "dut", 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
+			mustNoti(t, "dut", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-pkts", val: uint64(100)}),
+			mustNoti(t, "dut", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-octets", val: uint64(800)}),
+			mustNoti(t, "dut", 42, updSpec{path: "/flows/flow[name=flow_one]/state/in-rate", val: []byte{0, 0, 0, 0}}),
 		},
 	}, {
 		desc: "tx and rx",
@@ -1047,19 +1054,20 @@ func TestTelemetry(t *testing.T) {
 				60: 20,
 			},
 		},
+		inTarget: "ate",
 		want: []*gpb.Notification{
-			mustNoti(t, 1,
+			mustNoti(t, "ate", 1,
 				updSpec{path: "/flows/flow[name=flow_one]/name", val: "flow_one"},
 				updSpec{path: "/flows/flow[name=flow_one]/state/name", val: "flow_one"}),
-			mustNoti(t, 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-pkts", val: uint64(100)}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-octets", val: uint64(800)}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/out-rate", val: []byte{0, 0, 250, 69}}),
-			mustNoti(t, 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-pkts", val: uint64(0)}),
-			mustNoti(t, 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-octets", val: uint64(800)}),
-			mustNoti(t, 42, updSpec{path: "/flows/flow[name=flow_one]/state/in-rate", val: []byte{0, 0, 128, 65}}),
-			mustNoti(t, 42, updSpec{path: "/flows/flow[name=flow_one]/state/loss-pct", val: []byte{0, 0, 200, 66}}),
+			mustNoti(t, "ate", 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
+			mustNoti(t, "ate", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-pkts", val: uint64(100)}),
+			mustNoti(t, "ate", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/out-octets", val: uint64(800)}),
+			mustNoti(t, "ate", 100, updSpec{path: "/flows/flow[name=flow_one]/state/out-rate", val: []byte{0, 0, 250, 69}}),
+			mustNoti(t, "ate", 120, updSpec{path: "/flows/flow[name=flow_one]/state/transmit", val: true}),
+			mustNoti(t, "ate", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-pkts", val: uint64(0)}),
+			mustNoti(t, "ate", 100, updSpec{path: "/flows/flow[name=flow_one]/state/counters/in-octets", val: uint64(800)}),
+			mustNoti(t, "ate", 42, updSpec{path: "/flows/flow[name=flow_one]/state/in-rate", val: []byte{0, 0, 128, 65}}),
+			mustNoti(t, "ate", 42, updSpec{path: "/flows/flow[name=flow_one]/state/loss-pct", val: []byte{0, 0, 200, 66}}),
 		},
 	}}
 
@@ -1079,7 +1087,7 @@ func TestTelemetry(t *testing.T) {
 					t.Fatalf("invalid value in Notification, got: %v, err: %v", u.Val, err)
 				}
 
-				s += fmt.Sprintf("%d: %s: %v\n", n.Timestamp, p, v)
+				s += fmt.Sprintf("%d: %s:%s: %v\n", n.Timestamp, n.GetPrefix().GetTarget(), p, v)
 			}
 		}
 		return s
@@ -1087,8 +1095,7 @@ func TestTelemetry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got := tt.in.telemetry(); !testutil.NotificationSetEqual(got, tt.want) {
-
+			if got := tt.in.telemetry(tt.inTarget); !testutil.NotificationSetEqual(got, tt.want) {
 				t.Fatalf("did not get expected set of notifications, got: \n%s\nwant:\n%s", shortNoti(got), shortNoti(tt.want))
 			}
 		})
