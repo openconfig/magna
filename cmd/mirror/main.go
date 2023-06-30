@@ -1,4 +1,5 @@
-// Binary mirror implements a simple mechansim
+// Binary mirror implements a simple mechanism to copy packets that match
+// a filter between ports.
 package main
 
 import (
