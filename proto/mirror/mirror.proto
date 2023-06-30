@@ -1,11 +1,14 @@
 syntax = "proto3";
 
+// The mirror service controls packet mirroring sessions.
 package openconfig.magna.mirror;
 
 option go_package="github.com/openconfig/magna/proto/mirror";
 
 service Mirror {
+  // Start begins a copy of packets from the specified source port to the specified destination port.
   rpc Start(StartRequest) returns (StartResponse);
+  // Stop stops a copy session between two ports.
   rpc Stop(StopRequest) returns (StopResponse);
 }
 
