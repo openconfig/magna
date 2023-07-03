@@ -128,4 +128,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/openconfig/ondatra => /usr/local/google/home/robjs/go/src/github.com/openconfig/ondatra
+replace github.com/openconfig/ondatra => github.com/robshakir/ondatra
