@@ -104,6 +104,7 @@ func copyPackets(from, to string, filter func(p gopacket.Packet) bool) func(chan
 				return
 			case p := <-ps.Packets():
 				if !filter(p) {
+					klog.Infof("ignoring packet %v", p)
 					continue
 				}
 

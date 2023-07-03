@@ -165,6 +165,7 @@ func TestMPLS(t *testing.T) {
 	client, stop := mirrorClient(t, maddr)
 	defer stop()
 	startMirror(t, client)
+	time.Sleep(1 * time.Second)
 	defer func() { stopMirror(t, client) }()
 
 	otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
@@ -205,6 +206,8 @@ func TestMPLS(t *testing.T) {
 	t.Logf("Stopping MPLS traffic...")
 	otg.StopTraffic(t)
 
+	// Avoid a race with telemetry updates.
+	time.Sleep(1 * time.Second)
 	metrics := gnmi.Get(t, otg, gnmi.OTG().Flow("MPLS_FLOW").State())
 	got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
 	lossPackets := want - got
