@@ -100,6 +100,7 @@ func copyPackets(from, to string, filter func(p gopacket.Packet) bool) func(chan
 		for {
 			select {
 			case <-stop:
+				klog.Infof("stopping goroutine that copies from %s->%s", from, to)
 				return
 			case p := <-ps.Packets():
 				if !filter(p) {
