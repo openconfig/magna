@@ -148,7 +148,6 @@ func TestStop(t *testing.T) {
 			<-stopCh
 			called = true
 			wg.Done()
-			return
 		},
 	}}
 
