@@ -100,6 +100,7 @@ func copyPackets(from, to string, filter func(p gopacket.Packet) bool) func(chan
 		for {
 			select {
 			case <-stop:
+				// The stop channel indicates that our mirror session is done, hence return.
 				klog.Infof("stopping goroutine that copies from %s->%s", from, to)
 				return
 			case p := <-ps.Packets():
