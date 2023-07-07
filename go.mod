@@ -10,7 +10,7 @@ require (
 	github.com/open-traffic-generator/snappi/gosnappi v0.11.15
 	github.com/openconfig/gnmi v0.9.1
 	github.com/openconfig/goyang v1.4.0
-	github.com/openconfig/ondatra v0.1.23
+	github.com/openconfig/ondatra v0.1.24-0.20230707220529-4774ac3d2272
 	github.com/openconfig/ygot v0.28.3
 	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
 	google.golang.org/grpc v1.56.0
@@ -127,5 +127,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/openconfig/ondatra => github.com/robshakir/ondatra
