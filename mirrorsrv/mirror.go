@@ -100,6 +100,7 @@ func copyPackets(from, to string, filter func(p gopacket.Packet) bool) func(chan
 		for {
 			select {
 			case <-stop:
+				// The stop channel indicates that our mirror session is done, hence return.
 				return
 			case p := <-ps.Packets():
 				if !filter(p) {
