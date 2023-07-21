@@ -220,6 +220,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 
 		genFunc := func(stop chan struct{}) {
 			klog.Infof("MPLSFlowHandler send function started.")
+			f.clearStats()
 
 			buf := gopacket.NewSerializeBuffer()
 			gopacket.SerializeLayers(buf, gopacket.SerializeOptions{
@@ -409,6 +410,18 @@ func (f *flowCounters) setTransmit(state bool) {
 	}
 	f.Transmit.b = state
 	f.Transmit.ts = time.Now().UnixNano()
+}
+
+// clearStats zeros the stastitics for the flow.
+func (f *flowCounters) clearStats() {
+	f.Tx.mu.Lock()
+	defer f.Tx.mu.Unlock()
+
+	f.Rx.mu.Lock()
+	defer f.Rx.mu.Unlock()
+
+	f.Tx = &stats{}
+	f.Rx = &stats{}
 }
 
 // lossPct calculates the percentage loss that the flow has experienced.

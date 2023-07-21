@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
@@ -117,6 +118,7 @@ func TestSetControlState(t *testing.T) {
 		wantResponse: okResponse,
 		wantFn: func(t *testing.T) {
 			t.Helper()
+			time.Sleep(200 * time.Millisecond)
 			if state != "TRAFFIC_CALLED" {
 				t.Fatalf("did not get expected state, got: %s, want: TRAFFIC_CALLED", state)
 			}
