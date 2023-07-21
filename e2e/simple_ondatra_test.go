@@ -82,8 +82,8 @@ func configureATEInterfaces(t *testing.T, ate *ondatra.ATEDevice, srcATE, dstATE
 	return topology, nil
 }
 
-// pushBaseConfigs pushes the base configuration to the ATE and DUT devices in
-// the test topology.
+// pushBaseConfigs pushes the base configuration to the ATE device in the test
+// topology.
 func pushBaseConfigs(t *testing.T, ate *ondatra.ATEDevice) gosnappi.Config {
 	otgCfg, err := configureATEInterfaces(t, ate, ateSrc, ateDst)
 	if err != nil {
@@ -93,7 +93,9 @@ func pushBaseConfigs(t *testing.T, ate *ondatra.ATEDevice) gosnappi.Config {
 	return otgCfg
 }
 
+// mirrorAddr retrieves the address of the mirror container in the topology.
 func mirrorAddr(t *testing.T) string {
+	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
 	data := mirror.CustomData(solver.KNEServiceMapKey).(map[string]*tpb.Service)
 	m := data["mirror-controller"]
@@ -103,7 +105,9 @@ func mirrorAddr(t *testing.T) string {
 	return net.JoinHostPort(m.GetOutsideIp(), strconv.Itoa(int(m.GetOutside())))
 }
 
+// mirrorClient creates a new gRPC client for the mirror service.
 func mirrorClient(t *testing.T, addr string) (mpb.MirrorClient, func() error) {
+	t.Helper()
 	conn, err := grpc.Dial(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -115,6 +119,8 @@ func mirrorClient(t *testing.T, addr string) (mpb.MirrorClient, func() error) {
 	return mpb.NewMirrorClient(conn), conn.Close
 }
 
+// startMirror begins traffic mirroring between port1 and port2 on the mirror
+// container in the topology.
 func startMirror(t *testing.T, client mpb.MirrorClient) {
 	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
@@ -131,6 +137,8 @@ func startMirror(t *testing.T, client mpb.MirrorClient) {
 	}
 }
 
+// stopMirror stops traffic mirroring between port1 and port2 on the mirror
+// container in the topology.
 func stopMirror(t *testing.T, client mpb.MirrorClient) {
 	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
@@ -147,6 +155,10 @@ func stopMirror(t *testing.T, client mpb.MirrorClient) {
 	}
 }
 
+// TestMirror is a simple test that validates that the mirror service can
+// be contacted and the RPCs to start and stop traffic mirroring return
+// successful responses. It does not validate that the traffic mirroring
+// happens successfully.
 func TestMirror(t *testing.T) {
 	addr := mirrorAddr(t)
 	client, stop := mirrorClient(t, addr)
@@ -177,6 +189,10 @@ func TestMPLS(t *testing.T) {
 	mplsFlow.TxRx().Port().SetTxName(ateSrc.Name).SetRxName(ateDst.Name)
 
 	mplsFlow.Rate().SetChoice("pps").SetPps(1)
+
+	// OTG specifies that the order of the <flow>.Packet().Add() calls determines
+	// the stack of headers that are to be used, starting at the outer-most and
+	// ending with the inner-most.
 
 	// Set up ethernet layer.
 	eth := mplsFlow.Packet().Add().Ethernet()
