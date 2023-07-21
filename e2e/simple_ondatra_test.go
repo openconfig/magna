@@ -226,8 +226,7 @@ func TestMPLS(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	metrics := gnmi.Get(t, otg, gnmi.OTG().Flow("MPLS_FLOW").State())
 	got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
-	lossPackets := want - got
-	if lossPackets != 0 {
+	if lossPackets := want - got; lossPackets != 0 {
 		t.Fatalf("did not get expected number of packets, got: %d, want: %d", got, want)
 	}
 }
