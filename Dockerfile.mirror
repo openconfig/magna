@@ -1,0 +1,19 @@
+# Development image.
+FROM golang:1.19-alpine AS builder
+RUN apk add libpcap-dev libpcap
+RUN apk add build-base
+RUN apk add zsh
+
+# Run docker build from root of magna.
+RUN mkdir -p /go/src/github.com/openconfig/magna
+COPY . /go/src/github.com/openconfig/magna
+WORKDIR /go/src/github.com/openconfig/magna/cmd/mirror
+RUN GOOS=linux go build
+
+# Run second stage for the container that we actually run.
+FROM alpine:latest
+RUN apk add libpcap
+RUN mkdir /app
+COPY --from=builder go/src/github.com/openconfig/magna/cmd/mirror/mirror /app
+
+CMD ["/app/mirror", "-alsologtostderr", "-v=2"]
