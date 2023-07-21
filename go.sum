@@ -873,6 +873,8 @@ github.com/openconfig/lemming/operator v0.2.0 h1:dovZnR6lQkOHXcODli1NDOr/GVYrBY0
 github.com/openconfig/lemming/operator v0.2.0/go.mod h1:LKgEXSR5VK2CAeh2uKijKAXFj42uQuwakrCHVPF0iII=
 github.com/openconfig/ondatra v0.1.23 h1:1yU7d9gOUJqOg+VEM5092J4ZS952/hTLoeQTX+aAhD0=
 github.com/openconfig/ondatra v0.1.23/go.mod h1:k6UKXpEg+BaDjYYXsAtZuKgP/hVO8f9J0FNViOBUkwk=
+github.com/openconfig/ondatra v0.1.24-0.20230707220529-4774ac3d2272 h1:b4s6Mx/MaiFgC248T9ytSckcH5JlAV15Swtj30zczkw=
+github.com/openconfig/ondatra v0.1.24-0.20230707220529-4774ac3d2272/go.mod h1:k6UKXpEg+BaDjYYXsAtZuKgP/hVO8f9J0FNViOBUkwk=
 github.com/openconfig/testt v0.0.0-20220311054427-efbb1a32ec07 h1:X631iD/B0ximGFb5P9LY5wHju4SiedxUhc5UZEo7VSw=
 github.com/openconfig/ygnmi v0.7.6 h1:zJxmfPUrkqvq1tltGRuTRlpvkXyJECLPNMmfUhWXdWY=
 github.com/openconfig/ygnmi v0.7.6/go.mod h1:qk5qX7+Wvg0U0VyCqEz5gPtaAPgXMxGPwPwzDv6zCXk=

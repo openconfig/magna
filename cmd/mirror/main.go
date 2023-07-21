@@ -28,11 +28,12 @@ func main() {
 	ms := mirrorsrv.New()
 	mpb.RegisterMirrorServer(srv, ms)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", *port))
 	if err != nil {
 		klog.Exitf("cannot start listening, got err: %v", err)
 	}
 
+	klog.Infof("mirror server listening on %s", lis.Addr().String())
 	defer srv.Stop()
 
 	var wg sync.WaitGroup
