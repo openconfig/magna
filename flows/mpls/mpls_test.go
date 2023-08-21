@@ -3,6 +3,7 @@ package mpls
 import (
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -1097,6 +1098,88 @@ func TestTelemetry(t *testing.T) {
 		t.Run(tt.desc, func(t *testing.T) {
 			if got := tt.in.telemetry(tt.inTarget); !testutil.NotificationSetEqual(got, tt.want) {
 				t.Fatalf("did not get expected set of notifications, got: \n%s\nwant:\n%s", shortNoti(got), shortNoti(tt.want))
+			}
+		})
+	}
+}
+
+func TestClearStats(t *testing.T) {
+	tests := []struct {
+		desc string
+		in   *flowCounters
+		inTS int64
+		want *flowCounters
+	}{{
+		desc: "nil Tx, Rx",
+		in:   &flowCounters{},
+		inTS: 42,
+		want: &flowCounters{
+			Tx: &stats{
+				Pkts:   &val{ts: 42, u: 0},
+				Octets: &val{ts: 42, u: 0},
+				Rate:   &val{ts: 42, f: 0.0},
+			},
+			Rx: &stats{
+				Pkts:   &val{ts: 42, u: 0},
+				Octets: &val{ts: 42, u: 0},
+				Rate:   &val{ts: 42, f: 0.0},
+			},
+		},
+	}, {
+		desc: "empty Tx, Rx",
+		in:   newFlowCounters(),
+		inTS: 42,
+		want: &flowCounters{
+			Tx: &stats{
+				Pkts:   &val{ts: 42, u: 0},
+				Octets: &val{ts: 42, u: 0},
+				Rate:   &val{ts: 42, f: 0.0},
+			},
+			Rx: &stats{
+				Pkts:   &val{ts: 42, u: 0},
+				Octets: &val{ts: 42, u: 0},
+				Rate:   &val{ts: 42, f: 0.0},
+			},
+		},
+	}, {
+		desc: "populated",
+		in: &flowCounters{
+			Tx: &stats{
+				Pkts:   &val{ts: 21, u: 4},
+				Octets: &val{ts: 22, u: 2},
+				Rate:   &val{ts: 33, f: 4.2},
+			},
+			Rx: &stats{
+				Pkts:   &val{ts: 12, u: 2},
+				Octets: &val{ts: 18, u: 40},
+				Rate:   &val{ts: 9, f: 4.0},
+			},
+		},
+		inTS: 42,
+		want: &flowCounters{
+			Tx: &stats{
+				Pkts:   &val{ts: 42, u: 0},
+				Octets: &val{ts: 42, u: 0},
+				Rate:   &val{ts: 42, f: 0.0},
+			},
+			Rx: &stats{
+				Pkts:   &val{ts: 42, u: 0},
+				Octets: &val{ts: 42, u: 0},
+				Rate:   &val{ts: 42, f: 0.0},
+			},
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			tt.in.clearStats(tt.inTS)
+			if diff := cmp.Diff(tt.in, tt.want,
+				cmp.AllowUnexported(stats{}),
+				cmp.AllowUnexported(val{}),
+				cmpopts.IgnoreTypes(sync.RWMutex{}),
+				cmpopts.IgnoreTypes(sync.Mutex{}),
+			); diff != "" {
+				t.Fatalf("(flowCounters).clearStats(): did not get expected result, diff(-got,+want):\n%s", diff)
 			}
 		})
 	}
