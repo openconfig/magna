@@ -169,10 +169,10 @@ func TestMirror(t *testing.T) {
 	stopMirror(t, client)
 }
 
-func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcv4, dstv4 string) {
+func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string) {
 	mplsFlow := otgCfg.Flows().Add().SetName(name)
 	mplsFlow.Metrics().SetEnable(true)
-	mplsFlow.TxRx().Port().SetTxName(ateSrc.Name).SetRxName(ateDst.Name)
+	mplsFlow.TxRx().Port().SetTxName(srcName).SetRxName(dstName)
 
 	mplsFlow.Rate().SetChoice("pps").SetPps(1)
 
@@ -224,7 +224,7 @@ func TestMPLS(t *testing.T) {
 
 	otg := ondatra.ATE(t, "ate").OTG()
 	otgCfg.Flows().Clear().Items()
-	addMPLSFlow(t, otgCfg, "MPLS_FLOW", "100.64.1.1", "100.64.1.2")
+	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2")
 
 	otg.PushConfig(t, otgCfg)
 
@@ -244,6 +244,26 @@ func TestMPLS(t *testing.T) {
 	}
 }
 
+// checkFlow validates that OTG flow name passes the specified check function.
+func checkFlow(t *testing.T, otg *otg.OTG, name string, testFn func(got, want uint64) error) {
+	t.Helper()
+	metrics := gnmi.Get(t, otg, gnmi.OTG().Flow(name).State())
+	got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
+	if err := testFn(got, want); err != nil {
+		t.Fatalf("%s: did not get expected number of packets, %v", name, err)
+	}
+}
+
+// toleranceFn is a check function that ensures that the packets lost on the specified flow
+// are less than the lossTolerance constant.
+func toleranceFn(got, want uint64) error {
+	if lossPackets := want - got; lossPackets > lossTolerance {
+		return fmt.Errorf("got: %d, want: >= %d-%d", got, want, lossTolerance)
+	}
+	return nil
+}
+
+// TestMPLSFlows validates that multiple MPLS flows work with magna.
 func TestMPLSFlows(t *testing.T) {
 	tests := []struct {
 		desc      string
@@ -252,16 +272,39 @@ func TestMPLSFlows(t *testing.T) {
 	}{{
 		desc: "two flows - same source port",
 		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
-			addMPLSFlow(t, cfg, "FLOW_ONE", "100.64.1.1", "100.64.1.2")
-			addMPLSFlow(t, cfg, "FLOW_TWO", "100.64.2.1", "100.64.2.2")
+			addMPLSFlow(t, cfg, "FLOW_ONE", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2")
+			addMPLSFlow(t, cfg, "FLOW_TWO", ateSrc.Name, ateDst.Name, "100.64.2.1", "100.64.2.2")
 		},
 		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
 			for _, f := range []string{"FLOW_ONE", "FLOW_TWO"} {
-				metrics := gnmi.Get(t, otgc, gnmi.OTG().Flow(f).State())
-				got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
-				if lossPackets := want - got; lossPackets > lossTolerance {
-					t.Errorf("Flow %s: did not get expected number of packets, got: %d, want :%d", f, got, want)
+				checkFlow(t, otgc, f, toleranceFn)
+			}
+		},
+	}, {
+		desc: "failure - two flows, one that is not mirrored",
+		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
+			addMPLSFlow(t, cfg, "A->B", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2")
+			addMPLSFlow(t, cfg, "B->A", ateDst.Name, ateSrc.Name, "100.64.2.1", "100.64.2.2")
+		},
+		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
+			checkFlow(t, otgc, "A->B", toleranceFn)
+			checkFlow(t, otgc, "B->A", func(got, want uint64) error {
+				if got != 0 {
+					return fmt.Errorf("got: %d packets, want: 0", got)
 				}
+				return nil
+			})
+		},
+	}, {
+		desc: "ten flows",
+		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
+			for i := 0; i < 10; i++ {
+				addMPLSFlow(t, cfg, fmt.Sprintf("flow%d", i), ateSrc.Name, ateDst.Name, fmt.Sprintf("100.64.%d.1", i), fmt.Sprintf("100.64.%d.2", i))
+			}
+		},
+		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
+			for i := 0; i < 10; i++ {
+				checkFlow(t, otgc, fmt.Sprintf("flow%d", i), toleranceFn)
 			}
 		},
 	}}

@@ -52,6 +52,19 @@ func TestHandleFlows(t *testing.T) {
 		},
 		wantMethods: []TXRXFn{dummyFn, dummyFn},
 	}, {
+		desc: "duplicate flow names",
+		inFlows: []*otg.Flow{{
+			Name: "flow0",
+		}, {
+			Name: "flow0",
+		}},
+		inFns: []FlowGeneratorFn{
+			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
+				return func(tx, rx *FlowController) {}, true, nil
+			},
+		},
+		wantErrCode: codes.InvalidArgument,
+	}, {
 		desc: "flow handler that returns an error",
 		inFlows: []*otg.Flow{{
 			Name: "error",

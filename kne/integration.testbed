@@ -20,3 +20,14 @@ duts {
     id: "port2"
   }
 }
+
+links {
+  a: "ate:port1"
+  b: "mirror:port1"
+}
+
+links {
+  a: "ate:port2"
+  b: "mirror:port2"
+}
+
