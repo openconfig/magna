@@ -9,15 +9,21 @@ ates {
   ports {
     id: "port2"
   }
+  ports {
+    id: "port3",
+  }
 }
 
 duts {
   id: "mirror"
-  ports: {
+  ports {
     id: "port1"
   }
-  ports: {
+  ports {
     id: "port2"
+  }
+  ports {
+    id: "port3"
   }
 }
 
@@ -29,5 +35,10 @@ links {
 links {
   a: "ate:port2"
   b: "mirror:port2"
+}
+
+links {
+  a: "ate:port3"
+  b: "mirror:port3"
 }
 
