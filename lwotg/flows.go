@@ -58,10 +58,16 @@ func (s *Server) handleFlows(flows []*otg.Flow) ([]TXRXFn, error) {
 	s.fhMu.Lock()
 	defer s.fhMu.Unlock()
 
+	seenNames := map[string]struct{}{}
+
 	flowMethods := []TXRXFn{}
 	intfs := s.interfaces()
 	for _, flow := range flows {
 		var handled bool
+		if _, ok := seenNames[flow.GetName()]; ok {
+			return nil, status.Errorf(codes.InvalidArgument, "duplicate flow name: %s", flow.GetName())
+		}
+
 		for _, fn := range s.flowHandlers {
 			txrx, ok, err := fn(flow, intfs)
 			switch {
@@ -82,6 +88,7 @@ func (s *Server) handleFlows(flows []*otg.Flow) ([]TXRXFn, error) {
 		if !handled {
 			return nil, status.Errorf(codes.Unimplemented, "no handler for flow %s", flow.GetName())
 		}
+		seenNames[flow.GetName()] = struct{}{}
 	}
 	return flowMethods, nil
 }
