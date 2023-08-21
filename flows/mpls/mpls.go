@@ -457,11 +457,15 @@ func (f *flowCounters) setTransmit(state bool) {
 
 // clearStats zeros the stastitics for the flow.
 func (f *flowCounters) clearStats(ts int64) {
-	f.Tx.mu.Lock()
-	defer f.Tx.mu.Unlock()
+	if f.Tx != nil {
+		f.Tx.mu.Lock()
+		defer f.Tx.mu.Unlock()
+	}
 
-	f.Rx.mu.Lock()
-	defer f.Rx.mu.Unlock()
+	if f.Rx != nil {
+		f.Rx.mu.Lock()
+		defer f.Rx.mu.Unlock()
+	}
 
 	f.Tx = &stats{
 		Octets: &val{ts: ts, u: 0},
