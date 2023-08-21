@@ -14,6 +14,7 @@ import (
 	"github.com/openconfig/ondatra"
 	"github.com/openconfig/ondatra/gnmi"
 	"github.com/openconfig/ondatra/knebind/solver"
+	"github.com/openconfig/ondatra/otg"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -168,23 +169,8 @@ func TestMirror(t *testing.T) {
 	stopMirror(t, client)
 }
 
-// TestMPLS is a simple test that creates an MPLS flow between two ATE ports and
-// checks that there is no packet loss. It validates magna's end-to-end MPLS
-// flow accounting.
-func TestMPLS(t *testing.T) {
-	// Start a mirroring session to copy packets.
-	maddr := mirrorAddr(t)
-	client, stop := mirrorClient(t, maddr)
-	defer stop()
-	startMirror(t, client)
-	time.Sleep(1 * time.Second)
-	defer func() { stopMirror(t, client) }()
-
-	otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
-
-	otg := ondatra.ATE(t, "ate").OTG()
-	otgCfg.Flows().Clear().Items()
-	mplsFlow := otgCfg.Flows().Add().SetName("MPLS_FLOW")
+func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcv4, dstv4 string) {
+	mplsFlow := otgCfg.Flows().Add().SetName(name)
 	mplsFlow.Metrics().SetEnable(true)
 	mplsFlow.TxRx().Port().SetTxName(ateSrc.Name).SetRxName(ateDst.Name)
 
@@ -209,9 +195,36 @@ func TestMPLS(t *testing.T) {
 	mplsInner.BottomOfStack().SetChoice("value").SetValue(1)
 
 	ip4 := mplsFlow.Packet().Add().Ipv4()
-	ip4.Src().SetChoice("value").SetValue("100.64.1.1")
-	ip4.Dst().SetChoice("value").SetValue("100.64.1.2")
+	ip4.Src().SetChoice("value").SetValue(srcv4)
+	ip4.Dst().SetChoice("value").SetValue(dstv4)
 	ip4.Version().SetChoice("value").SetValue(4)
+
+}
+
+const (
+	// lossTolerance indicates the number of packets we are prepared to lose during
+	// a test. If the packets per second generation rate is low then the flow can be
+	// stopped before a slow packet generator creates the next packet.
+	lossTolerance = 1
+)
+
+// TestMPLS is a simple test that creates an MPLS flow between two ATE ports and
+// checks that there is no packet loss. It validates magna's end-to-end MPLS
+// flow accounting.
+func TestMPLS(t *testing.T) {
+	// Start a mirroring session to copy packets.
+	maddr := mirrorAddr(t)
+	client, stop := mirrorClient(t, maddr)
+	defer stop()
+	startMirror(t, client)
+	time.Sleep(1 * time.Second)
+	defer func() { stopMirror(t, client) }()
+
+	otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
+
+	otg := ondatra.ATE(t, "ate").OTG()
+	otgCfg.Flows().Clear().Items()
+	addMPLSFlow(t, otgCfg, "MPLS_FLOW", "100.64.1.1", "100.64.1.2")
 
 	otg.PushConfig(t, otgCfg)
 
@@ -226,7 +239,62 @@ func TestMPLS(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	metrics := gnmi.Get(t, otg, gnmi.OTG().Flow("MPLS_FLOW").State())
 	got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
-	if lossPackets := want - got; lossPackets != 0 {
+	if lossPackets := want - got; lossPackets > lossTolerance {
 		t.Fatalf("did not get expected number of packets, got: %d, want: %d", got, want)
+	}
+}
+
+func TestMPLSFlows(t *testing.T) {
+	tests := []struct {
+		desc      string
+		inFlowFn  func(*testing.T, gosnappi.Config)
+		inCheckFn func(*testing.T, *otg.OTG)
+	}{{
+		desc: "two flows - same source port",
+		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
+			addMPLSFlow(t, cfg, "FLOW_ONE", "100.64.1.1", "100.64.1.2")
+			addMPLSFlow(t, cfg, "FLOW_TWO", "100.64.2.1", "100.64.2.2")
+		},
+		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
+			for _, f := range []string{"FLOW_ONE", "FLOW_TWO"} {
+				metrics := gnmi.Get(t, otgc, gnmi.OTG().Flow(f).State())
+				got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
+				if lossPackets := want - got; lossPackets > lossTolerance {
+					t.Errorf("Flow %s: did not get expected number of packets, got: %d, want :%d", f, got, want)
+				}
+			}
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			maddr := mirrorAddr(t)
+			client, stop := mirrorClient(t, maddr)
+			defer stop()
+			startMirror(t, client)
+			time.Sleep(1 * time.Second)
+			defer func() { stopMirror(t, client) }()
+
+			otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
+
+			otg := ondatra.ATE(t, "ate").OTG()
+			otgCfg.Flows().Clear().Items()
+
+			tt.inFlowFn(t, otgCfg)
+
+			otg.PushConfig(t, otgCfg)
+
+			t.Logf("Starting MPLS traffic...")
+			otg.StartTraffic(t)
+			t.Logf("Sleeping for %s...", *sleepTime)
+			time.Sleep(*sleepTime)
+			t.Logf("Stopping MPLS traffic...")
+			otg.StopTraffic(t)
+
+			time.Sleep(1 * time.Second)
+
+			tt.inCheckFn(t, otg)
+
+		})
 	}
 }

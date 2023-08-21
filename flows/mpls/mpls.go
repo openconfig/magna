@@ -169,13 +169,55 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	return pktLayers, nil
 }
 
+// flowReporter encapsulates multiple named flows.
+type flowReporter struct {
+	mu sync.RWMutex
+	// counters is a map of counters, keyed by the flow name, for each flow.
+	counters map[string]*flowCounters
+}
+
+// newReporter returns a new flow reporter.
+func newReporter() *flowReporter {
+	return &flowReporter{
+		counters: map[string]*flowCounters{},
+	}
+}
+
+// addFlow adds the supplied flow, fc, as the entry at name in the map. It overwrites
+// existing entries.
+func (r *flowReporter) addFlow(name string, fc *flowCounters) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.counters[name] = fc
+}
+
+// getFlow returns the counters for the flow with the specified name.
+func (r *flowReporter) getFlow(name string) *flowCounters {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.counters[name]
+}
+
+// telemetry creates the gNMI telemetry for all flows within the reporter.
+func (r *flowReporter) telemetry(updateFn gnmit.UpdateFn, target string) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for name, f := range r.counters {
+		for _, u := range f.telemetry(target) {
+			klog.Infof("flow %s: sending telemetry update %s", name, u)
+			updateFn(u)
+		}
+	}
+}
+
 // New returns a new MPLS flow generator, consisting of:
 //   - a FlowGeneratorFn that is used in lwotg to create the MPLS flow.
 //   - a gnmit.Task that is used to write telemetry.
 func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
-	// TODO(robjs): We need a flow counter for each individual flow. This
-	// implementation results in just one flow being supported currently.
-	f := newFlowCounters()
+	// reporter encapsulates the counters for multiple flows. The MPLS flow handler is
+	// created once at startup time of the magna instance.
+	reporter := newReporter()
+
 	// t is a gnmit Task which reads from the gnmi channel specified and writes
 	// into the cache.
 	t := gnmit.Task{
@@ -187,10 +229,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 				defer cleanup()
 				for {
 					<-ticker.C
-					for _, u := range f.telemetry(target) {
-						klog.Infof("sending telemetry update %s", u)
-						updateFn(u)
-					}
+					reporter.telemetry(updateFn, target)
 				}
 			}()
 			return nil
@@ -203,7 +242,8 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			return nil, false, err
 		}
 
-		f.Headers = hdrs
+		fc := newFlowCounters()
+		fc.Headers = hdrs
 
 		pps, err := common.Rate(flow, hdrs)
 		if err != nil {
@@ -215,10 +255,12 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			return nil, false, fmt.Errorf("cannot determine ports, %v", err)
 		}
 
-		f.Name = &val{s: flow.Name, ts: flowTimeFn()}
+		fc.Name = &val{s: flow.Name, ts: flowTimeFn()}
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
+		reporter.addFlow(flow.Name, fc)
 
 		genFunc := func(stop chan struct{}) {
+			f := reporter.getFlow(flow.Name)
 			klog.Infof("MPLSFlowHandler send function started.")
 			f.clearStats()
 
@@ -291,6 +333,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 
 			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()
+			f := reporter.getFlow(flow.Name)
 			for {
 				select {
 				case <-stop:
