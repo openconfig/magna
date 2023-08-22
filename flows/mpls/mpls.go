@@ -33,7 +33,7 @@ var (
 	// timeout specifies how long to wait for a PCAP handle.
 	pcapTimeout = 30 * time.Second
 	// packetBytes is the number of bytes to read from an input packet.
-	packetBytes int = 1500
+	packetBytes int = 100
 )
 
 const (
@@ -202,9 +202,8 @@ func (r *flowReporter) getFlow(name string) *flowCounters {
 func (r *flowReporter) telemetry(updateFn gnmit.UpdateFn, target string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	for name, f := range r.counters {
+	for _, f := range r.counters {
 		for _, u := range f.telemetry(target) {
-			klog.Infof("flow %s: sending telemetry update %s", name, u)
 			updateFn(u)
 		}
 	}
@@ -283,11 +282,11 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			for {
 				select {
 				case <-stop:
-					klog.Infof("MPLSFlowHandler send exiting on %s", tx)
+					klog.Infof("MPLSFlowHandler (%s) send exiting on %s", flow.Name, tx)
 					f.setTransmit(false)
 					return
 				default:
-					klog.Infof("MPLSFlowHandler sending %d packets", pps)
+					klog.Infof("MPLSFlowHandler (%s) sending %d packets", flow.Name, pps)
 					for i := 1; i <= int(pps); i++ {
 						if err := handle.WritePacketData(buf.Bytes()); err != nil {
 							klog.Errorf("MPLSFlowHandler cannot write packet on interface %s, %v", tx, err)
@@ -337,8 +336,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 			for {
 				select {
 				case <-stop:
-					// TODO(robjs): zero the flow statistics/delete the flow
-					klog.Infof("MPLSFlowHandler Rx exiting on %s", rx)
+					klog.Infof("MPLSFlowHandler Rx (%s) exiting on %s", flow.Name, rx)
 					return
 				case p := <-packetCh:
 					if err := rxPacket(f, hdrs, p); err != nil {
@@ -395,6 +393,14 @@ func newFlowCounters() *flowCounters {
 		Tx: &stats{},
 		Rx: &stats{},
 	}
+}
+
+// GetName returns the name of the flow.
+func (f *flowCounters) GetName() string {
+	if f.Name == nil {
+		return ""
+	}
+	return f.Name.s
 }
 
 // updateTx updates the transmit counters for the flow according to the specified
@@ -688,14 +694,25 @@ var (
 // tracking the flow, the set of headers that are expected, and the received packet.
 func rxPacket(f *flowCounters, hdrs []gopacket.SerializableLayer, p gopacket.Packet) error {
 	match := packetInFlow(hdrs, p)
-	klog.Infof("MPLS flow: packet %s -> match? %v", p, match)
+	klog.Infof("MPLS flow %s: packet %s -> match? %v", f.GetName(), v4FlowInfo(p), match)
 	if !match {
 		return nil
 	}
-	klog.Infof("MPLS flow: received packet with size %d", len(p.Data()))
+	klog.Infof("MPLS flow %s: received packet with size %d", f.GetName(), len(p.Data()))
 
 	f.updateRx(timeFn(), len(p.Data()))
 	return nil
+}
+
+// v4FlowInfo is a helper that returns a logging string containing the IPv4 source and destination
+// of a packet.
+func v4FlowInfo(p gopacket.Packet) string {
+	recv, ok := p.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%s->%s", recv.SrcIP, recv.DstIP)
+
 }
 
 // packetInFlow checks whether the packet p matches the specification in hdrs by checking
@@ -714,6 +731,5 @@ func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) bool {
 		klog.Errorf("did not find IPv4 headers, specOK: %v, recvOK: %v", specOK, recvOK)
 		return false
 	}
-	klog.Infof("received IPv4 header is %v", recv)
 	return recvIP4.SrcIP.Equal(spec.SrcIP) && recvIP4.DstIP.Equal(spec.DstIP)
 }
