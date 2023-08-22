@@ -55,6 +55,11 @@ var (
 		Name: "port2",
 		MAC:  "02:00:02:01:01:01",
 	}
+
+	ateAuxDst = &intf{
+		Name: "port3",
+		MAC:  "03:00:03:01:01:01",
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -66,7 +71,7 @@ func TestMain(m *testing.M) {
 func configureATEInterfaces(t *testing.T, ate *ondatra.ATEDevice, srcATE, dstATE *intf) (gosnappi.Config, error) {
 	otg := ate.OTG()
 	topology := otg.NewConfig(t)
-	for _, p := range []*intf{ateSrc, ateDst} {
+	for _, p := range []*intf{ateSrc, ateDst, ateAuxDst} {
 		topology.Ports().Add().SetName(p.Name)
 		dev := topology.Devices().Add().SetName(p.Name)
 		eth := dev.Ethernets().Add().SetName(fmt.Sprintf("%s_ETH", p.Name))
@@ -120,39 +125,50 @@ func mirrorClient(t *testing.T, addr string) (mpb.MirrorClient, func() error) {
 	return mpb.NewMirrorClient(conn), conn.Close
 }
 
-// startMirror begins traffic mirroring between port1 and port2 on the mirror
+// startTwoPortMirror begins traffic mirroring between port1 and port2 on the mirror
 // container in the topology.
-func startMirror(t *testing.T, client mpb.MirrorClient) {
+func startTwoPortMirror(t *testing.T, client mpb.MirrorClient) {
 	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
+	startMirrors(t, client, &mpb.StartRequest{
+		From: mirror.Port(t, "port1").Name(),
+		To:   mirror.Port(t, "port2").Name(),
+	})
+}
 
+// startMirrors starts the mirrors described by the supplied requests.
+func startMirrors(t *testing.T, client mpb.MirrorClient, reqs ...*mpb.StartRequest) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	startReq := &mpb.StartRequest{
-		From: mirror.Port(t, "port1").Name(),
-		To:   mirror.Port(t, "port2").Name(),
-	}
-	if _, err := client.Start(ctx, startReq); err != nil {
-		t.Fatalf("cannot start mirror client, got err: %v", err)
+	for _, sr := range reqs {
+		if _, err := client.Start(ctx, sr); err != nil {
+			t.Fatalf("cannot start mirror client, got err: %v", err)
+		}
 	}
 }
 
-// stopMirror stops traffic mirroring between port1 and port2 on the mirror
+// stopTwoPortMirror stops traffic mirroring between port1 and port2 on the mirror
 // container in the topology.
-func stopMirror(t *testing.T, client mpb.MirrorClient) {
+func stopTwoPortMirror(t *testing.T, client mpb.MirrorClient) {
 	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
+	stopMirrors(t, client, &mpb.StopRequest{
+		From: mirror.Port(t, "port1").Name(),
+		To:   mirror.Port(t, "port2").Name(),
+	})
 
+}
+
+// stopMirrors stops the mirrors described by the supplied requests.
+func stopMirrors(t *testing.T, client mpb.MirrorClient, reqs ...*mpb.StopRequest) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stopReq := &mpb.StopRequest{
-		From: mirror.Port(t, "port1").Name(),
-		To:   mirror.Port(t, "port2").Name(),
-	}
-	if _, err := client.Stop(ctx, stopReq); err != nil {
-		t.Fatalf("cannot stop mirror client, got err: %v", err)
+	for _, sr := range reqs {
+		if _, err := client.Stop(ctx, sr); err != nil {
+			t.Fatalf("cannot stop mirror client, got err: %v", err)
+		}
 	}
 }
 
@@ -164,9 +180,9 @@ func TestMirror(t *testing.T) {
 	addr := mirrorAddr(t)
 	client, stop := mirrorClient(t, addr)
 	defer stop()
-	startMirror(t, client)
+	startTwoPortMirror(t, client)
 	time.Sleep(1 * time.Second)
-	stopMirror(t, client)
+	stopTwoPortMirror(t, client)
 }
 
 func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string) {
@@ -216,9 +232,9 @@ func TestMPLS(t *testing.T) {
 	maddr := mirrorAddr(t)
 	client, stop := mirrorClient(t, maddr)
 	defer stop()
-	startMirror(t, client)
+	startTwoPortMirror(t, client)
 	time.Sleep(1 * time.Second)
-	defer func() { stopMirror(t, client) }()
+	defer func() { stopTwoPortMirror(t, client) }()
 
 	otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
 
@@ -249,6 +265,7 @@ func checkFlow(t *testing.T, otg *otg.OTG, name string, testFn func(got, want ui
 	t.Helper()
 	metrics := gnmi.Get(t, otg, gnmi.OTG().Flow(name).State())
 	got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
+	t.Logf("%s: recv: %d, sent: %d packets", name, got, want)
 	if err := testFn(got, want); err != nil {
 		t.Fatalf("%s: did not get expected number of packets, %v", name, err)
 	}
@@ -263,8 +280,8 @@ func toleranceFn(got, want uint64) error {
 	return nil
 }
 
-// TestMPLSFlows validates that multiple MPLS flows work with magna.
-func TestMPLSFlows(t *testing.T) {
+// TestMPLSFlowsTwoPorts validates that multiple MPLS flows work with magna.
+func TestMPLSFlowsTwoPorts(t *testing.T) {
 	tests := []struct {
 		desc      string
 		inFlowFn  func(*testing.T, gosnappi.Config)
@@ -314,9 +331,112 @@ func TestMPLSFlows(t *testing.T) {
 			maddr := mirrorAddr(t)
 			client, stop := mirrorClient(t, maddr)
 			defer stop()
-			startMirror(t, client)
+			startTwoPortMirror(t, client)
 			time.Sleep(1 * time.Second)
-			defer func() { stopMirror(t, client) }()
+			defer func() { stopTwoPortMirror(t, client) }()
+
+			otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
+
+			otg := ondatra.ATE(t, "ate").OTG()
+			otgCfg.Flows().Clear().Items()
+
+			tt.inFlowFn(t, otgCfg)
+
+			otg.PushConfig(t, otgCfg)
+
+			t.Logf("Starting MPLS traffic...")
+			otg.StartTraffic(t)
+			t.Logf("Sleeping for %s...", *sleepTime)
+			time.Sleep(*sleepTime)
+			t.Logf("Stopping MPLS traffic...")
+			otg.StopTraffic(t)
+
+			time.Sleep(1 * time.Second)
+
+			tt.inCheckFn(t, otg)
+
+		})
+	}
+}
+
+// startThreePortMirror starts two mirroring sessions:
+//
+//   - the first copies traffic from port1 -> port2, so any packet received on port1 is received by the device connected to port2.
+//   - the second copies traffic from port3 -> port2, so any packet received on port3 is received by the device connected to port2.
+//
+// This results in port2 receiving all the packets that are transmitted by magna on ports 1+3.
+func startThreePortMirror(t *testing.T, client mpb.MirrorClient) {
+	t.Helper()
+	mirror := ondatra.DUT(t, "mirror")
+	startMirrors(t, client,
+		&mpb.StartRequest{
+			From: mirror.Port(t, "port1").Name(),
+			To:   mirror.Port(t, "port2").Name(),
+		},
+		&mpb.StartRequest{
+			From: mirror.Port(t, "port3").Name(),
+			To:   mirror.Port(t, "port2").Name(),
+		},
+	)
+}
+
+// stopThreePortMirror stops the mirroring of traffic between port1->port2 and port3->port2.
+func stopThreePortMirror(t *testing.T, client mpb.MirrorClient) {
+	t.Helper()
+	mirror := ondatra.DUT(t, "mirror")
+	stopMirrors(t, client,
+		&mpb.StopRequest{
+			From: mirror.Port(t, "port1").Name(),
+			To:   mirror.Port(t, "port2").Name(),
+		},
+		&mpb.StopRequest{
+			From: mirror.Port(t, "port3").Name(),
+			To:   mirror.Port(t, "port2").Name(),
+		},
+	)
+}
+
+func TestMPLSFlowsThreePorts(t *testing.T) {
+	tests := []struct {
+		desc      string
+		inFlowFn  func(*testing.T, gosnappi.Config)
+		inCheckFn func(*testing.T, *otg.OTG)
+	}{{
+		desc: "one flow each",
+		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
+			addMPLSFlow(t, cfg, "port1->port2", "port1", "port2", "100.64.1.1", "100.64.1.2")
+			addMPLSFlow(t, cfg, "port3->port2", "port3", "port2", "100.64.2.1", "100.64.2.2")
+		},
+		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
+			for _, f := range []string{"port1->port2", "port3->port2"} {
+				checkFlow(t, otgc, f, toleranceFn)
+			}
+		},
+	}, {
+		desc: "ten flows on each port",
+		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
+			for i := 0; i < 10; i++ {
+				addMPLSFlow(t, cfg, fmt.Sprintf("port1->port2_%d", i), "port1", "port2", fmt.Sprintf("100.64.%d.1", i), fmt.Sprintf("100.64.%d.2", i))
+				addMPLSFlow(t, cfg, fmt.Sprintf("port3->port2_%d", i), "port3", "port2", fmt.Sprintf("100.64.%d.1", i+20), fmt.Sprintf("100.64.%d.2", i+20))
+			}
+		},
+		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
+			for i := 0; i < 10; i++ {
+				for _, f := range []string{"port1->port2", "port3->port2"} {
+					checkFlow(t, otgc, fmt.Sprintf("%s_%d", f, i), toleranceFn)
+				}
+			}
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			maddr := mirrorAddr(t)
+			client, stop := mirrorClient(t, maddr)
+			defer stop()
+			startThreePortMirror(t, client)
+			time.Sleep(1 * time.Second)
+			defer func() { stopThreePortMirror(t, client) }()
 
 			otgCfg := pushBaseConfigs(t, ondatra.ATE(t, "ate"))
 

@@ -1,6 +1,8 @@
 package lwotg
 
 import (
+	"sync"
+
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -113,7 +115,13 @@ func (s *Server) stopTraffic() {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()
 
+	var wg sync.WaitGroup
 	for _, c := range s.generatorChs {
-		c.Stop <- struct{}{}
+		wg.Add(1)
+		go func(stop chan struct{}) {
+			defer wg.Done()
+			stop <- struct{}{}
+		}(c.Stop)
 	}
+	wg.Wait()
 }
