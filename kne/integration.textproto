@@ -64,3 +64,9 @@ links: {
   z_node: "mirror"
   z_int : "eth2"
 }
+links: {
+  a_node: "ate"
+  a_int: "eth3"
+  z_node: "mirror"
+  z_int: "eth3"
+}
