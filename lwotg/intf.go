@@ -59,7 +59,6 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*OTGIntf, error)
 			}
 			sysInt, ok := physIntf[pn]
 			if !ok {
-				//lint:ignore SA1019 deprecated field to be updated when all callers are.
 				return nil, status.Errorf(codes.InvalidArgument, "invalid port name for Ethernet %s, does not map to a physical interface", pn)
 			}
 
