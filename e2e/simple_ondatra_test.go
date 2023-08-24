@@ -74,8 +74,8 @@ func configureATEInterfaces(t *testing.T, ate *ondatra.ATEDevice, srcATE, dstATE
 	for _, p := range []*intf{ateSrc, ateDst, ateAuxDst} {
 		topology.Ports().Add().SetName(p.Name)
 		dev := topology.Devices().Add().SetName(p.Name)
-		eth := dev.Ethernets().Add().SetName(fmt.Sprintf("%s_ETH", p.Name))
-		eth.SetPortName(dev.Name()).SetMac(p.MAC)
+		eth := dev.Ethernets().Add().SetName(fmt.Sprintf("%s_ETH", p.Name)).SetMac(p.MAC)
+		eth.Connection().SetPortName(dev.Name())
 	}
 
 	c, err := topology.ToJson()
@@ -188,7 +188,7 @@ func TestMirror(t *testing.T) {
 func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string) {
 	mplsFlow := otgCfg.Flows().Add().SetName(name)
 	mplsFlow.Metrics().SetEnable(true)
-	mplsFlow.TxRx().Port().SetTxName(srcName).SetRxName(dstName)
+	mplsFlow.TxRx().Port().SetTxName(srcName).SetRxNames([]string{dstName})
 
 	mplsFlow.Rate().SetChoice("pps").SetPps(1)
 

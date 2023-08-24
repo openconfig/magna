@@ -17,7 +17,11 @@ func Ports(flow *otg.Flow, intfs []*lwotg.OTGIntf) (tx string, rx string, err er
 	}
 
 	txName := flow.GetTxRx().GetPort().GetTxName()
-	rxName := flow.GetTxRx().GetPort().GetRxName()
+	if rxList := flow.GetTxRx().GetPort().GetRxNames(); len(rxList) != 1 {
+		return "", "", fmt.Errorf("flows received at multiple ports are not supported, got: %d ports (%v)", len(rxList), rxList)
+
+	}
+	rxName := flow.GetTxRx().GetPort().GetRxNames()[0]
 
 	for _, i := range intfs {
 		if i.OTGPortName == txName {
@@ -43,7 +47,7 @@ func Ports(flow *otg.Flow, intfs []*lwotg.OTGIntf) (tx string, rx string, err er
 // specification if there is no rate specified.
 //
 // TODO(robjs): support specifications other than simple PPS.
-func Rate(flow *otg.Flow, hdrs []gopacket.SerializableLayer) (int64, error) {
+func Rate(flow *otg.Flow, hdrs []gopacket.SerializableLayer) (uint64, error) {
 	if flowT := flow.GetRate().GetChoice(); flowT != otg.FlowRate_Choice_pps && flowT != otg.FlowRate_Choice_unspecified {
 		return 0, fmt.Errorf("unsupported flow rate specification, %v", flowT)
 	}
