@@ -33,8 +33,8 @@ func TestPorts(t *testing.T) {
 			TxRx: &otg.FlowTxRx{
 				Choice: &portValue,
 				Port: &otg.FlowPort{
-					TxName: "port1",
-					RxName: proto.String("port2"),
+					TxName:  "port1",
+					RxNames: []string{"port2"},
 				},
 			},
 		},
@@ -45,8 +45,8 @@ func TestPorts(t *testing.T) {
 			TxRx: &otg.FlowTxRx{
 				Choice: &portValue,
 				Port: &otg.FlowPort{
-					TxName: "port1",
-					RxName: proto.String("port2"),
+					TxName:  "port1",
+					RxNames: []string{"port2"},
 				},
 			},
 		},
@@ -59,6 +59,18 @@ func TestPorts(t *testing.T) {
 		}},
 		wantTx: "eth0",
 		wantRx: "eth1",
+	}, {
+		desc: "multiple rx ports",
+		inFlow: &otg.Flow{
+			TxRx: &otg.FlowTxRx{
+				Choice: &portValue,
+				Port: &otg.FlowPort{
+					TxName:  "port1",
+					RxNames: []string{"port1", "port2"},
+				},
+			},
+		},
+		wantErr: true,
 	}}
 
 	for _, tt := range tests {
@@ -85,7 +97,7 @@ func TestRate(t *testing.T) {
 		desc      string
 		inFlow    *otg.Flow
 		inHeaders []gopacket.SerializableLayer
-		wantPPS   int64
+		wantPPS   uint64
 		wantErr   bool
 	}{{
 		desc: "invalid specification",
@@ -104,7 +116,7 @@ func TestRate(t *testing.T) {
 		inFlow: &otg.Flow{
 			Rate: &otg.FlowRate{
 				Choice: &ratePPS,
-				Pps:    proto.Int64(1234),
+				Pps:    proto.Uint64(1234),
 			},
 		},
 		wantPPS: 1234,

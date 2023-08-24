@@ -7,7 +7,7 @@ require (
 	github.com/golang/glog v1.1.1
 	github.com/google/go-cmp v0.5.9
 	github.com/google/gopacket v1.1.19
-	github.com/open-traffic-generator/snappi/gosnappi v0.11.15
+	github.com/open-traffic-generator/snappi/gosnappi v0.12.1
 	github.com/openconfig/featureprofiles v0.0.0-20230629171650-1057c66c4e52
 	github.com/openconfig/gnmi v0.10.0
 	github.com/openconfig/goyang v1.4.0

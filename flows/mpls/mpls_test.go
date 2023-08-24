@@ -187,15 +187,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}},
@@ -257,7 +257,7 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValues,
@@ -286,11 +286,11 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValues,
@@ -319,15 +319,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(0),
+						Value:  proto.Uint32(0),
 					},
 				},
 			}, {
@@ -335,11 +335,11 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(84),
+						Value:  proto.Uint32(84),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}},
@@ -381,15 +381,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -405,7 +405,7 @@ func TestHeaders(t *testing.T) {
 					},
 					Version: &otg.PatternFlowIpv4Version{
 						Choice: &ipVersionValue,
-						Value:  proto.Int32(4),
+						Value:  proto.Uint32(4),
 					},
 				},
 			}},
@@ -447,15 +447,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -470,7 +470,7 @@ func TestHeaders(t *testing.T) {
 					},
 					Version: &otg.PatternFlowIpv4Version{
 						Choice: &ipVersionValue,
-						Value:  proto.Int32(4),
+						Value:  proto.Uint32(4),
 					},
 				},
 			}},
@@ -496,15 +496,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -519,7 +519,7 @@ func TestHeaders(t *testing.T) {
 					},
 					Version: &otg.PatternFlowIpv4Version{
 						Choice: &ipVersionValue,
-						Value:  proto.Int32(4),
+						Value:  proto.Uint32(4),
 					},
 				},
 			}},
@@ -545,15 +545,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -594,15 +594,15 @@ func TestHeaders(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -618,7 +618,7 @@ func TestHeaders(t *testing.T) {
 					},
 					Version: &otg.PatternFlowIpv4Version{
 						Choice: &ipVersionValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 				},
 			}},
@@ -1545,15 +1545,15 @@ func TestDecode(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -1569,7 +1569,7 @@ func TestDecode(t *testing.T) {
 					},
 					Version: &otg.PatternFlowIpv4Version{
 						Choice: &ipVersionValue,
-						Value:  proto.Int32(4),
+						Value:  proto.Uint32(4),
 					},
 				},
 			}},
@@ -1596,15 +1596,15 @@ func TestDecode(t *testing.T) {
 				Mpls: &otg.FlowMpls{
 					Label: &otg.PatternFlowMplsLabel{
 						Choice: &mplsLabelValue,
-						Value:  proto.Int32(42),
+						Value:  proto.Uint32(42),
 					},
 					TimeToLive: &otg.PatternFlowMplsTimeToLive{
 						Choice: &mplsTTLValue,
-						Value:  proto.Int32(2),
+						Value:  proto.Uint32(2),
 					},
 					BottomOfStack: &otg.PatternFlowMplsBottomOfStack{
 						Choice: &mplsBOSValue,
-						Value:  proto.Int32(1),
+						Value:  proto.Uint32(1),
 					},
 				},
 			}, {
@@ -1620,7 +1620,7 @@ func TestDecode(t *testing.T) {
 					},
 					Version: &otg.PatternFlowIpv4Version{
 						Choice: &ipVersionValue,
-						Value:  proto.Int32(4),
+						Value:  proto.Uint32(4),
 					},
 				},
 			}},

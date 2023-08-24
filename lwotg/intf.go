@@ -53,22 +53,21 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*OTGIntf, error)
 	intfs := []*OTGIntf{}
 	for _, d := range devices {
 		for _, e := range d.Ethernets {
-			if e.GetPortName() == "" {
+			pn := e.GetConnection().GetPortName()
+			if pn == "" {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid Ethernet port %v, does not specify a name", e)
 			}
-			//lint:ignore SA1019 deprecated field to be updated when all callers are.
-			sysInt, ok := physIntf[*e.PortName]
+			sysInt, ok := physIntf[pn]
 			if !ok {
 				//lint:ignore SA1019 deprecated field to be updated when all callers are.
-				return nil, status.Errorf(codes.InvalidArgument, "invalid port name for Ethernet %s, does not map to a physical interface", *e.PortName)
+				return nil, status.Errorf(codes.InvalidArgument, "invalid port name for Ethernet %s, does not map to a physical interface", pn)
 			}
 
 			i := &OTGIntf{
 				OTGEthernetName: e.Name,
-				//lint:ignore SA1019 deprecated field to be updated when all callers are.
-				OTGPortName: *e.PortName,
-				SystemName:  sysInt,
-				IPv4:        []*ipAddress{},
+				OTGPortName:     pn,
+				SystemName:      sysInt,
+				IPv4:            []*ipAddress{},
 			}
 
 			for _, a := range e.Ipv4Addresses {

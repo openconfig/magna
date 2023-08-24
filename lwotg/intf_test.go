@@ -41,8 +41,10 @@ func TestPortsToSystem(t *testing.T) {
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name:     "port0ETH",
-				PortName: proto.String("port42"),
+				Name: "port0ETH",
+				Connection: &otg.EthernetConnection{
+					PortName: proto.String("port42"),
+				},
 			}},
 		}},
 		wantErr: true,
@@ -54,8 +56,10 @@ func TestPortsToSystem(t *testing.T) {
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name:     "port0ETH",
-				PortName: proto.String("port0"),
+				Name: "port0ETH",
+				Connection: &otg.EthernetConnection{
+					PortName: proto.String("port0"),
+				},
 			}},
 		}},
 		wantIntf: []*OTGIntf{{
@@ -71,11 +75,13 @@ func TestPortsToSystem(t *testing.T) {
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name:     "port0ETH",
-				PortName: proto.String("port0"),
+				Name: "port0ETH",
+				Connection: &otg.EthernetConnection{
+					PortName: proto.String("port0"),
+				},
 				Ipv4Addresses: []*otg.DeviceIpv4{{
 					Address: "192.0.2.1",
-					Prefix:  proto.Int32(24),
+					Prefix:  proto.Uint32(24),
 					Gateway: "192.0.2.254",
 				}},
 			}},
@@ -101,23 +107,27 @@ func TestPortsToSystem(t *testing.T) {
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name:     "port0ETH",
-				PortName: proto.String("port0"),
+				Name: "port0ETH",
+				Connection: &otg.EthernetConnection{
+					PortName: proto.String("port0"),
+				},
 				Ipv4Addresses: []*otg.DeviceIpv4{{
 					Address: "192.0.2.1",
-					Prefix:  proto.Int32(24),
+					Prefix:  proto.Uint32(24),
 					Gateway: "192.0.2.254",
 				}, {
 					Address: "10.0.0.1",
-					Prefix:  proto.Int32(24),
+					Prefix:  proto.Uint32(24),
 					Gateway: "10.0.0.254",
 				}},
 			}, {
-				Name:     "port1ETH",
-				PortName: proto.String("port1"),
+				Name: "port1ETH",
+				Connection: &otg.EthernetConnection{
+					PortName: proto.String("port1"),
+				},
 				Ipv4Addresses: []*otg.DeviceIpv4{{
 					Address: "10.0.1.1",
-					Prefix:  proto.Int32(24),
+					Prefix:  proto.Uint32(24),
 					Gateway: "10.0.1.254",
 				}},
 			}},
