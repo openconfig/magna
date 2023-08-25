@@ -60,6 +60,26 @@ func TestPorts(t *testing.T) {
 		wantTx: "eth0",
 		wantRx: "eth1",
 	}, {
+		desc: "valid legacy specification",
+		inFlow: &otg.Flow{
+			TxRx: &otg.FlowTxRx{
+				Choice: &portValue,
+				Port: &otg.FlowPort{
+					TxName: "port1",
+					RxName: proto.String("port2"), // Note, this field is to be deprecated.
+				},
+			},
+		},
+		inIntfs: []*lwotg.OTGIntf{{
+			OTGPortName: "port1",
+			SystemName:  "eth0",
+		}, {
+			OTGPortName: "port2",
+			SystemName:  "eth1",
+		}},
+		wantTx: "eth0",
+		wantRx: "eth1",
+	}, {
 		desc: "multiple rx ports",
 		inFlow: &otg.Flow{
 			TxRx: &otg.FlowTxRx{
