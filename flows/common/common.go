@@ -17,11 +17,19 @@ func Ports(flow *otg.Flow, intfs []*lwotg.OTGIntf) (tx string, rx string, err er
 	}
 
 	txName := flow.GetTxRx().GetPort().GetTxName()
-	if rxList := flow.GetTxRx().GetPort().GetRxNames(); len(rxList) != 1 {
+	var rxName string
+	switch rxList := flow.GetTxRx().GetPort().GetRxNames(); len(rxList) {
+	case 0:
+		rxName = flow.GetTxRx().GetPort().GetRxName()
+		if rxName == "" {
+			return "", "", fmt.Errorf("flows specified single port, but it was not specified")
+		}
+	case 1:
+		rxName = flow.GetTxRx().GetPort().GetRxNames()[0]
+	default:
 		return "", "", fmt.Errorf("flows received at multiple ports are not supported, got: %d ports (%v)", len(rxList), rxList)
 
 	}
-	rxName := flow.GetTxRx().GetPort().GetRxNames()[0]
 
 	for _, i := range intfs {
 		if i.OTGPortName == txName {
