@@ -21,10 +21,15 @@ var (
 	packetBytes int = 100
 )
 
+// hdrsFunc is a function which specifies which packet headers to expect.
 type hdrsFunc func(*otg.Flow) ([]gopacket.SerializableLayer, error)
 
+// matchFunc is a function which determines if a packet p matchs the headers
+// hdrs.
 type matchFunc func(hdrs []gopacket.SerializableLayer, p gopacket.Packet) bool
 
+// Handler creates a new flow generator function based on the header and match
+// function provided.
 func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGeneratorFn {
 	return func(flow *otg.Flow, intfs []*lwotg.OTGIntf) (lwotg.TXRXFn, bool, error) {
 		hdrs, err := fn(flow)
