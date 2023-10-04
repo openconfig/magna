@@ -19,13 +19,6 @@ import (
 	"k8s.io/klog"
 )
 
-var (
-	// timeout specifies how long to wait for a PCAP handle.
-	pcapTimeout = 30 * time.Second
-	// packetBytes is the number of bytes to read from an input packet.
-	packetBytes int = 100
-)
-
 const (
 	// defaultMPLSTTL is the TTL value used by default in the MPLS header.
 	defaultMPLSTTL uint8 = 64
