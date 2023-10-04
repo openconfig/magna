@@ -30,8 +30,20 @@ func (r *Reporter) Telemetry(updateFn gnmit.UpdateFn, target string) {
 	}
 }
 
+// AddFlow adds the supplied flow, fc, as the entry at name in the map. It overwrites
+// existing entries.
+func (r *Reporter) AddFlow(name string, fc *counters) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.counters[name] = fc
+}
 
-
+// Flow returns the counters for the flow with the specified name.
+func (r *Reporter) Flow(name string) *counters {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.counters[name]
+}
 
 
 

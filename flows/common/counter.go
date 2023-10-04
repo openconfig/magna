@@ -46,6 +46,13 @@ type counters struct {
 	Timeseries map[int64]int
 }
 
+func NewCounters() *counters {
+	return &counters{
+		Tx: &stats{},
+		Rx: &stats{},
+	}
+}
+
 // GetName returns the name of the flow.
 func (f *counters) GetName() string {
 	if f.Name == nil {
@@ -186,41 +193,6 @@ func (f *counters) rxRate() float32 {
 	return float32(sum) / delta * 8.0
 }
 
-// float32ToBinary converts a float32 value into IEEE754 representation
-// and converts it to the generated ygot type for use in generated structs.
-func float32ToBinary(f float32) otgyang.Binary {
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, math.Float32bits(f))
-	return otgyang.Binary(b)
-}
-
-// val is used to store a timestamped telemetry value.
-type val struct {
-	// ts is the timestamp in nanoseconds since the unix epoch that the value was
-	// collected.
-	ts int64
-	// f is the value if it is of type float32.
-	f float32
-	// u is the value if it is of type uint64.
-	u uint64
-	// b is the value if it is of type bool.
-	b bool
-	// s is the value if it is of type string.
-	s string
-}
-
-// stats stores metrics that are tracked for an individual flow direction.
-type stats struct {
-	mu sync.RWMutex
-	// rate indicates the rate at which packets are being sent or received according
-	// to the specific context.
-	Rate *val
-	// octets indicates the total number of octets that have been sent.
-	Octets *val
-	// pkts indicates the total number of packets that have been sent.
-	Pkts *val
-}
-
 // telemetry generates the set of gNMI Notifications that describes the flow's current state.
 // The target argument specifies the Target value that should be included in the notifications.
 func (f *counters) telemetry(target string) []*gpb.Notification {
@@ -334,4 +306,12 @@ func (f *counters) telemetry(target string) []*gpb.Notification {
 	}
 
 	return notis
+}
+
+// float32ToBinary converts a float32 value into IEEE754 representation
+// and converts it to the generated ygot type for use in generated structs.
+func float32ToBinary(f float32) otgyang.Binary {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, math.Float32bits(f))
+	return otgyang.Binary(b)
 }
