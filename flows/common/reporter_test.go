@@ -8,20 +8,20 @@ import (
 )
 
 func TestReporter(t *testing.T) {
-	tests := []struct{
-		desc string
-		inFlows []string
+	tests := []struct {
+		desc        string
+		inFlows     []string
 		wantCounter map[string]*counters
 	}{
 		{
-			desc: "simple",
+			desc:    "simple",
 			inFlows: []string{"one"},
 			wantCounter: map[string]*counters{
 				"one": nil,
 			},
 		},
 		{
-			desc: "two flows",
+			desc:    "two flows",
 			inFlows: []string{"one", "two"},
 			wantCounter: map[string]*counters{
 				"one": nil,
@@ -29,7 +29,7 @@ func TestReporter(t *testing.T) {
 			},
 		},
 		{
-			desc: "repeat flows",
+			desc:    "repeat flows",
 			inFlows: []string{"one", "two", "two"},
 			wantCounter: map[string]*counters{
 				"one": nil,

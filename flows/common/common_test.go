@@ -277,4 +277,3 @@ func TestRxPacket(t *testing.T) {
 	}
 	timeFn = time.Now
 }
-

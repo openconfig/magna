@@ -44,6 +44,3 @@ func (r *Reporter) Flow(name string) *counters {
 	defer r.mu.RUnlock()
 	return r.counters[name]
 }
-
-
-
