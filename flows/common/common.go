@@ -21,7 +21,8 @@ var (
 	packetBytes int = 100
 )
 
-// hdrsFunc is a function which specifies which packet headers to expect.
+// hdrsFunc is a function which specifies which packet headers to create. It is
+// also used to determine the correctness of the headers received.
 type hdrsFunc func(*otg.Flow) ([]gopacket.SerializableLayer, error)
 
 // matchFunc is a function which determines if a packet p matchs the headers
@@ -56,7 +57,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 		genFunc := func(stop chan struct{}) {
 			f := reporter.Flow(flow.Name)
-			klog.Infof("MPLSFlowHandler send function started.")
+			klog.Infof("%s send function started.", flow.Name)
 			f.clearStats(time.Now().UnixNano())
 
 			buf := gopacket.NewSerializeBuffer()
@@ -66,10 +67,10 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			}, hdrs...)
 			size := len(buf.Bytes())
 
-			klog.Infof("MPLSFlowHandler Tx interface %s", tx)
+			klog.Infof("%s Tx interface %s", flow.Name, tx)
 			handle, err := pcap.OpenLive(tx, 1500, true, pcapTimeout)
 			if err != nil {
-				klog.Errorf("MPLSFlowHandler Tx error: %v", err)
+				klog.Errorf("%s Tx error: %v", flow.Name, err)
 				return
 			}
 			defer handle.Close()
@@ -78,14 +79,14 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("MPLSFlowHandler (%s) send exiting on %s", flow.Name, tx)
+					klog.Infof("%s send exiting on %s", flow.Name, tx)
 					f.setTransmit(false)
 					return
 				default:
-					klog.Infof("MPLSFlowHandler (%s) sending %d packets", flow.Name, pps)
+					klog.Infof("%s sending %d packets", flow.Name, pps)
 					for i := 1; i <= int(pps); i++ {
 						if err := handle.WritePacketData(buf.Bytes()); err != nil {
-							klog.Errorf("MPLSFlowHandler cannot write packet on interface %s, %v", tx, err)
+							klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
 							return
 						}
 					}
@@ -97,7 +98,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			}
 		}
 		recvFunc := func(stop chan struct{}) {
-			klog.Infof("MPLSFlowHandler receive function started on interface %s", rx)
+			klog.Infof("%s receive function started on interface %s", flow.Name, rx)
 			ih, err := pcap.NewInactiveHandle(rx)
 			if err != nil {
 				klog.Errorf("cannot create handle, err: %v", err)
@@ -120,7 +121,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			handle, err := ih.Activate()
 			if err != nil {
-				klog.Errorf("MPLSFlowHandler Rx error: %v", err)
+				klog.Errorf("%s Rx error: %v", flow.Name, err)
 				return
 			}
 			defer handle.Close()
@@ -131,11 +132,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("MPLSFlowHandler Rx (%s) exiting on %s", flow.Name, rx)
+					klog.Infof("%s Rx exiting on %s", flow.Name, rx)
 					return
 				case p := <-packetCh:
 					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
-						klog.Errorf("MPLSFlowHandler cannot receive packet on interface %s, %v", rx, err)
+						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
 						return
 					}
 				}

@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/gopacket"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
+
+	"github.com/google/gopacket"
 	"github.com/openconfig/magna/otgyang"
 	tcommon "github.com/openconfig/magna/telemetry/common"
 	"github.com/openconfig/ygot/ygot"
