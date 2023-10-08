@@ -49,7 +49,7 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	var (
 		ethernet *otg.FlowHeader
 		ip4      *otg.FlowHeader
-		ip6 		 *otg.FlowHeader
+		ip6      *otg.FlowHeader
 	)
 
 	for _, layer := range f.Packet {
@@ -122,10 +122,10 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 		}
 
 		pktLayers = append(pktLayers, &layers.Ethernet{
-				SrcMAC:       srcMAC,
-				DstMAC:       dstMAC,
-				EthernetType: layers.EthernetTypeIPv4,
-			},
+			SrcMAC:       srcMAC,
+			DstMAC:       dstMAC,
+			EthernetType: layers.EthernetTypeIPv4,
+		},
 			&layers.IPv4{
 				SrcIP:   srcIP,
 				DstIP:   dstIP,

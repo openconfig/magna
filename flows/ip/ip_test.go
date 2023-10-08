@@ -25,11 +25,11 @@ var (
 	srcMACValues = otg.PatternFlowEthernetSrc_Choice_values
 
 	dstIPValue      = otg.PatternFlowIpv4Dst_Choice_value
-	dstIPv6Value = otg.PatternFlowIpv6Dst_Choice_value
+	dstIPv6Value    = otg.PatternFlowIpv6Dst_Choice_value
 	srcIPValue      = otg.PatternFlowIpv4Src_Choice_value
-	srcIPv6Value = otg.PatternFlowIpv6Src_Choice_value
-	ip4VersionValue  = otg.PatternFlowIpv4Version_Choice_value
-	ip6VersionValue  = otg.PatternFlowIpv6Version_Choice_value
+	srcIPv6Value    = otg.PatternFlowIpv6Src_Choice_value
+	ip4VersionValue = otg.PatternFlowIpv4Version_Choice_value
+	ip6VersionValue = otg.PatternFlowIpv6Version_Choice_value
 )
 
 func TestHeaders(t *testing.T) {
@@ -170,11 +170,11 @@ func TestHeaders(t *testing.T) {
 						Ethernet: &otg.FlowEthernet{
 							Dst: &otg.PatternFlowEthernetDst{
 								Choice: &dstMACValue,
-								Value: proto.String("00:01:02:03:04:05"),
+								Value:  proto.String("00:01:02:03:04:05"),
 							},
 							Src: &otg.PatternFlowEthernetSrc{
 								Choice: &srcMACValue,
-								Value: proto.String("00:01:02:03:04:05"),
+								Value:  proto.String("00:01:02:03:04:05"),
 							},
 						},
 					},
@@ -183,15 +183,15 @@ func TestHeaders(t *testing.T) {
 						Ipv4: &otg.FlowIpv4{
 							Version: &otg.PatternFlowIpv4Version{
 								Choice: &ip4VersionValue,
-								Value: proto.Uint32(4),
+								Value:  proto.Uint32(4),
 							},
 							Src: &otg.PatternFlowIpv4Src{
 								Choice: &srcIPValue,
-								Value: proto.String("1.1.1.1"),
+								Value:  proto.String("1.1.1.1"),
 							},
 							Dst: &otg.PatternFlowIpv4Dst{
 								Choice: &dstIPValue,
-								Value: proto.String("1.1.1.2"),
+								Value:  proto.String("1.1.1.2"),
 							},
 						},
 					},
@@ -199,14 +199,14 @@ func TestHeaders(t *testing.T) {
 			},
 			wantLayers: []gopacket.SerializableLayer{
 				&layers.Ethernet{
-					SrcMAC: validMAC,
-					DstMAC: validMAC,
+					SrcMAC:       validMAC,
+					DstMAC:       validMAC,
 					EthernetType: layers.EthernetTypeIPv4,
 				},
 				&layers.IPv4{
 					Version: 4,
-					SrcIP: net.ParseIP("1.1.1.1"),
-					DstIP: net.ParseIP("1.1.1.2"),
+					SrcIP:   net.ParseIP("1.1.1.1"),
+					DstIP:   net.ParseIP("1.1.1.2"),
 				},
 			},
 		},
@@ -219,11 +219,11 @@ func TestHeaders(t *testing.T) {
 						Ethernet: &otg.FlowEthernet{
 							Dst: &otg.PatternFlowEthernetDst{
 								Choice: &dstMACValue,
-								Value: proto.String("00:01:02:03:04:05"),
+								Value:  proto.String("00:01:02:03:04:05"),
 							},
 							Src: &otg.PatternFlowEthernetSrc{
 								Choice: &srcMACValue,
-								Value: proto.String("00:01:02:03:04:05"),
+								Value:  proto.String("00:01:02:03:04:05"),
 							},
 						},
 					},
@@ -232,15 +232,15 @@ func TestHeaders(t *testing.T) {
 						Ipv6: &otg.FlowIpv6{
 							Version: &otg.PatternFlowIpv6Version{
 								Choice: &ip6VersionValue,
-								Value: proto.Uint32(6),
+								Value:  proto.Uint32(6),
 							},
 							Src: &otg.PatternFlowIpv6Src{
 								Choice: &srcIPv6Value,
-								Value: proto.String("::1"),
+								Value:  proto.String("::1"),
 							},
 							Dst: &otg.PatternFlowIpv6Dst{
 								Choice: &dstIPv6Value,
-								Value: proto.String("::2"),
+								Value:  proto.String("::2"),
 							},
 						},
 					},
@@ -248,14 +248,14 @@ func TestHeaders(t *testing.T) {
 			},
 			wantLayers: []gopacket.SerializableLayer{
 				&layers.Ethernet{
-					SrcMAC: validMAC,
-					DstMAC: validMAC,
+					SrcMAC:       validMAC,
+					DstMAC:       validMAC,
 					EthernetType: layers.EthernetTypeIPv6,
 				},
 				&layers.IPv6{
 					Version: 6,
-					SrcIP: net.ParseIP("::1"),
-					DstIP: net.ParseIP("::2"),
+					SrcIP:   net.ParseIP("::1"),
+					DstIP:   net.ParseIP("::2"),
 				},
 			},
 		},
