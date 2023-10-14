@@ -208,11 +208,9 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, rx)
 					return
 				case p := <-packetCh:
-					go func(p gopacket.Packet) {
-						if err := rxPacket(f, p, match(hdrs, p)); err != nil {
-							klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
-						}
-					}(p)
+					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
+						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
+					}
 				}
 			}
 		}
