@@ -60,9 +60,17 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
 		reporter.AddFlow(flow.Name, fc)
 
-		// TODO(robjs): wrap pcap in an interface so we can test our flow logic.
+		// TODO(robjs): In the future we should wrap the PCAP handle in a library so that we can test our
+		// logic by writing into a test. Today, we're relying on integration test coverage here.
 
-		genFunc := func(stop chan struct{}) {
+		genFunc := func(stop, rxReady chan struct{}) {
+			// Don't proceed to set up the transmit function until the listener has already been created
+			// and is listening, this avoids us sending packets into the void when we know no-one is listening
+			// for them to account the flow.
+			klog.Infof("waiting for channel in flow %s", flow.Name)
+			<-rxReady
+			klog.Infof("proceeding for flow %s", flow.Name)
+
 			f := reporter.Flow(flow.Name)
 			klog.Infof("%s send function started.", flow.Name)
 			f.clearStats(time.Now().UnixNano())
@@ -108,13 +116,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			}
 			defer handle.Close()
 
-			/*handle, err := pcap.OpenLive(tx, 1500, true, pcapTimeout)
-			if err != nil {
-				klog.Errorf("%s Tx error: %v", flow.Name, err)
-				return
-			}
-			defer handle.Close()*/
-
 			f.setTransmit(true)
 			totPackets := uint32(0)
 			// stopFlow indicates whether we should stop sending packets on the flow, it is set
@@ -137,9 +138,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 						sendStart := time.Now()
 						sent := 0
 						for i := 1; i <= int(pps); i++ {
-							/*if i != 1 {
-								time.Sleep(1 * time.Millisecond)
-							}*/
 							if numPackets != 0 && totPackets >= numPackets {
 								klog.Infof("%s: finished sending, sent %d packets", flow.Name, totPackets)
 								stopFlow = true
@@ -156,13 +154,13 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 						f.updateTx(int(sent), size)
 						sleepDur := (1 * time.Second) - time.Since(sendStart)
-						klog.Infof("sleeping for %s\n", sleepDur)
 						time.Sleep(sleepDur)
 					}
 				}
 			}
 		}
-		recvFunc := func(stop chan struct{}) {
+
+		recvFunc := func(stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.Name, rx)
 			ih, err := pcap.NewInactiveHandle(rx)
 			if err != nil {
@@ -199,20 +197,17 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()
 			f := reporter.Flow(flow.Name)
-			pkts := 0
-			allPkts := 0
+
+			// Close the readyForTx channel so that the transmitter knows that we are ready to
+			// receive packets.
+			close(readyForTx)
+
 			for {
 				select {
 				case <-stop:
-					klog.Infof("%s: received %d packets total", flow.Name, allPkts)
 					klog.Infof("%s Rx exiting on %s", flow.Name, rx)
 					return
 				case p := <-packetCh:
-					allPkts++
-					if match(hdrs, p) {
-						pkts++
-						klog.Infof("%s: matched %d packets", flow.Name, pkts)
-					}
 					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
 						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
 						return
@@ -222,12 +217,10 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		}
 
 		return func(tx, rx *lwotg.FlowController) {
-			go recvFunc(rx.Stop)
-			// TODO(robjs): We need to handle this in a cleaner way -- the receiver MUST have started before the sender starts sending packets.
-			// Currently we sleep for a long enough time that this might be OK, but we're in the window that the user might call stoptraffic so
-			// this isn't really ideal.
-			time.Sleep(2000 * time.Millisecond)
-			go genFunc(tx.Stop)
+			// Make the channel that is used for co-ordination between the sender and receiver.
+			ch := make(chan struct{})
+			go genFunc(tx.Stop, ch)
+			go recvFunc(rx.Stop, ch)
 		}, true, nil
 	}
 }
@@ -329,7 +322,6 @@ func rxPacket(f *counters, p gopacket.Packet, match bool) error {
 	if !match {
 		return nil
 	}
-	klog.Infof("flow %s: received packet with size %d", f.GetName(), len(p.Data()))
 
 	f.updateRx(timeFn(), len(p.Data()))
 	return nil
