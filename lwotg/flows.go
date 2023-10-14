@@ -129,12 +129,12 @@ func (s *Server) stopTraffic() {
 	var wg sync.WaitGroup
 	for i, c := range s.generatorChs {
 		wg.Add(1)
-		go func(stop chan struct{}, i int) {
+		f := func(id string, stop chan struct{}, i int) {
 			defer wg.Done()
-			klog.Infof("stopping generator %d", i)
+			klog.Infof("stopping %s", id)
 			stop <- struct{}{}
-			klog.Infof("generator %d stopped", i)
-		}(c.Stop, i)
+		}
+		go f(c.ID, c.Stop, i)
 	}
 	klog.Infof("stopTraffic is still waiting for something to be completed.")
 	wg.Wait()
