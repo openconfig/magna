@@ -46,6 +46,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			return nil, false, fmt.Errorf("cannot calculate rate, %v", err)
 		}
 
+		numPackets, err := flowPackets(flow)
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot extract number of flow packets, %v", err)
+		}
+
 		tx, rx, err := Ports(flow, intfs)
 		if err != nil {
 			return nil, false, fmt.Errorf("cannot determine ports, %v", err)
@@ -54,6 +59,8 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		fc.Name = &val{s: flow.Name, ts: flowTimeFn()}
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
 		reporter.AddFlow(flow.Name, fc)
+
+		// TODO(robjs): wrap pcap in an interface so we can test our flow logic.
 
 		genFunc := func(stop chan struct{}) {
 			f := reporter.Flow(flow.Name)
@@ -68,14 +75,52 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			size := len(buf.Bytes())
 
 			klog.Infof("%s Tx interface %s", flow.Name, tx)
-			handle, err := pcap.OpenLive(tx, 1500, true, pcapTimeout)
+
+			ih, err := pcap.NewInactiveHandle(tx)
+			if err != nil {
+				klog.Errorf("cannot create handle, err: %v", err)
+				return
+			}
+			defer ih.CleanUp()
+			if err := ih.SetImmediateMode(true); err != nil {
+				klog.Errorf("cannot set immediate mode on handle, err: %v", err)
+				return
+			}
+
+			if err := ih.SetPromisc(false); err != nil {
+				klog.Errorf("cannot set promiscous mode, err: %v", err)
+				return
+			}
+
+			if err := ih.SetSnapLen(packetBytes); err != nil {
+				klog.Errorf("cannot set packet length, err: %v", err)
+			}
+
+			// Set buffer to be 200MB of sent packets.
+			if err := ih.SetBufferSize(200e6); err != nil {
+				klog.Errorf("cannot set buffer size, err: %v", err)
+			}
+
+			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("%s Tx error: %v", flow.Name, err)
 				return
 			}
 			defer handle.Close()
 
+			/*handle, err := pcap.OpenLive(tx, 1500, true, pcapTimeout)
+			if err != nil {
+				klog.Errorf("%s Tx error: %v", flow.Name, err)
+				return
+			}
+			defer handle.Close()*/
+
 			f.setTransmit(true)
+			totPackets := uint32(0)
+			// stopFlow indicates whether we should stop sending packets on the flow, it is set
+			// when the flow specification says that we should only send a limited number of
+			// packets.
+			var stopFlow bool
 			for {
 				select {
 				case <-stop:
@@ -83,17 +128,37 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 					f.setTransmit(false)
 					return
 				default:
-					klog.Infof("%s sending %d packets", flow.Name, pps)
-					for i := 1; i <= int(pps); i++ {
-						if err := handle.WritePacketData(buf.Bytes()); err != nil {
-							klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
-							return
+					switch stopFlow {
+					case true:
+						// avoid busy looping.
+						time.Sleep(1 * time.Second)
+					default:
+						klog.Infof("%s sending %d packets", flow.Name, pps)
+						sendStart := time.Now()
+						sent := 0
+						for i := 1; i <= int(pps); i++ {
+							/*if i != 1 {
+								time.Sleep(1 * time.Millisecond)
+							}*/
+							if numPackets != 0 && totPackets >= numPackets {
+								klog.Infof("%s: finished sending, sent %d packets", flow.Name, totPackets)
+								stopFlow = true
+								break
+							}
+							if err := handle.WritePacketData(buf.Bytes()); err != nil {
+								klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
+								return
+							}
+							totPackets += 1
+							sent += 1
 						}
-					}
+						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.Name, sent, totPackets, time.Since(sendStart))
 
-					f.updateTx(int(pps), size)
-					// TODO(robjs): This assumes that sending the packets take zero time. We should consider being more accurate here.
-					time.Sleep(1 * time.Second)
+						f.updateTx(int(sent), size)
+						sleepDur := (1 * time.Second) - time.Since(sendStart)
+						klog.Infof("sleeping for %s\n", sleepDur)
+						time.Sleep(sleepDur)
+					}
 				}
 			}
 		}
@@ -119,6 +184,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 				klog.Errorf("cannot set packet length, err: %v", err)
 			}
 
+			// Set buffer to be 200MB of received packets.
+			if err := ih.SetBufferSize(200e6); err != nil {
+				klog.Errorf("cannot set buffer size, err: %v", err)
+			}
+
 			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("%s Rx error: %v", flow.Name, err)
@@ -129,12 +199,20 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()
 			f := reporter.Flow(flow.Name)
+			pkts := 0
+			allPkts := 0
 			for {
 				select {
 				case <-stop:
+					klog.Infof("%s: received %d packets total", flow.Name, allPkts)
 					klog.Infof("%s Rx exiting on %s", flow.Name, rx)
 					return
 				case p := <-packetCh:
+					allPkts++
+					if match(hdrs, p) {
+						pkts++
+						klog.Infof("%s: matched %d packets", flow.Name, pkts)
+					}
 					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
 						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
 						return
@@ -144,8 +222,12 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		}
 
 		return func(tx, rx *lwotg.FlowController) {
-			go genFunc(tx.Stop)
 			go recvFunc(rx.Stop)
+			// TODO(robjs): We need to handle this in a cleaner way -- the receiver MUST have started before the sender starts sending packets.
+			// Currently we sleep for a long enough time that this might be OK, but we're in the window that the user might call stoptraffic so
+			// this isn't really ideal.
+			time.Sleep(2000 * time.Millisecond)
+			go genFunc(tx.Stop)
 		}, true, nil
 	}
 }
@@ -208,6 +290,19 @@ func Rate(flow *otg.Flow, hdrs []gopacket.SerializableLayer) (uint64, error) {
 	return pps, nil
 }
 
+func flowPackets(flow *otg.Flow) (uint32, error) {
+	if durT := flow.GetDuration().GetChoice(); durT != otg.FlowDuration_Choice_fixed_packets && durT != otg.FlowDuration_Choice_unspecified {
+		return 0, nil
+	}
+
+	// 12 is the OTG default for the packet gap.
+	if (flow.GetDuration().GetFixedPackets().GetGap() != 0 && flow.GetDuration().GetFixedPackets().GetGap() != 12) || flow.GetDuration().GetFixedPackets().GetDelay() != nil {
+		return 0, fmt.Errorf("gap and delay specifications are unsupported, got gap: %v, delay: %v", flow.GetDuration().GetFixedPackets().GetGap(), flow.GetDuration().GetFixedPackets().GetDelay())
+	}
+
+	return flow.GetDuration().GetFixedPackets().GetPackets(), nil
+}
+
 var (
 	// timeFn is a function that returns a time.Time that can be overloaded in unit tests.
 	timeFn = time.Now
@@ -231,7 +326,6 @@ func flowInfo(p gopacket.Packet) string {
 // rxPacket is called for each packet that is received. It takes arguments of the statistics
 // tracking the flow, the set of headers that are expected, and the received packet.
 func rxPacket(f *counters, p gopacket.Packet, match bool) error {
-	klog.Infof("flow %s: packet %s -> match? %v", f.GetName(), flowInfo(p), match)
 	if !match {
 		return nil
 	}

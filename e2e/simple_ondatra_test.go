@@ -185,12 +185,15 @@ func TestMirror(t *testing.T) {
 	stopTwoPortMirror(t, client)
 }
 
-func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string) {
+func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string, pps uint64, totPackets uint32) {
 	mplsFlow := otgCfg.Flows().Add().SetName(name)
 	mplsFlow.Metrics().SetEnable(true)
 	mplsFlow.TxRx().Port().SetTxName(srcName).SetRxNames([]string{dstName})
 
-	mplsFlow.Rate().SetChoice("pps").SetPps(1)
+	mplsFlow.Rate().SetChoice("pps").SetPps(pps)
+	if totPackets != 0 {
+		mplsFlow.Duration().SetChoice("fixed_packets").FixedPackets().SetPackets(totPackets)
+	}
 
 	// OTG specifies that the order of the <flow>.Packet().Add() calls determines
 	// the stack of headers that are to be used, starting at the outer-most and
@@ -240,7 +243,7 @@ func TestMPLS(t *testing.T) {
 
 	otg := ondatra.ATE(t, "ate").OTG()
 	otgCfg.Flows().Clear().Items()
-	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2")
+	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, 0)
 
 	otg.PushConfig(t, otgCfg)
 
@@ -289,8 +292,8 @@ func TestMPLSFlowsTwoPorts(t *testing.T) {
 	}{{
 		desc: "two flows - same source port",
 		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
-			addMPLSFlow(t, cfg, "FLOW_ONE", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2")
-			addMPLSFlow(t, cfg, "FLOW_TWO", ateSrc.Name, ateDst.Name, "100.64.2.1", "100.64.2.2")
+			addMPLSFlow(t, cfg, "FLOW_ONE", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, 0)
+			addMPLSFlow(t, cfg, "FLOW_TWO", ateSrc.Name, ateDst.Name, "100.64.2.1", "100.64.2.2", 1, 0)
 		},
 		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
 			for _, f := range []string{"FLOW_ONE", "FLOW_TWO"} {
@@ -300,8 +303,8 @@ func TestMPLSFlowsTwoPorts(t *testing.T) {
 	}, {
 		desc: "failure - two flows, one that is not mirrored",
 		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
-			addMPLSFlow(t, cfg, "A->B", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2")
-			addMPLSFlow(t, cfg, "B->A", ateDst.Name, ateSrc.Name, "100.64.2.1", "100.64.2.2")
+			addMPLSFlow(t, cfg, "A->B", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, 0)
+			addMPLSFlow(t, cfg, "B->A", ateDst.Name, ateSrc.Name, "100.64.2.1", "100.64.2.2", 2, 0)
 		},
 		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
 			checkFlow(t, otgc, "A->B", toleranceFn)
@@ -316,7 +319,7 @@ func TestMPLSFlowsTwoPorts(t *testing.T) {
 		desc: "ten flows",
 		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
 			for i := 0; i < 10; i++ {
-				addMPLSFlow(t, cfg, fmt.Sprintf("flow%d", i), ateSrc.Name, ateDst.Name, fmt.Sprintf("100.64.%d.1", i), fmt.Sprintf("100.64.%d.2", i))
+				addMPLSFlow(t, cfg, fmt.Sprintf("flow%d", i), ateSrc.Name, ateDst.Name, fmt.Sprintf("100.64.%d.1", i), fmt.Sprintf("100.64.%d.2", i), 1, 0)
 			}
 		},
 		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
@@ -404,8 +407,8 @@ func TestMPLSFlowsThreePorts(t *testing.T) {
 	}{{
 		desc: "one flow each",
 		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
-			addMPLSFlow(t, cfg, "port1->port2", "port1", "port2", "100.64.1.1", "100.64.1.2")
-			addMPLSFlow(t, cfg, "port3->port2", "port3", "port2", "100.64.2.1", "100.64.2.2")
+			addMPLSFlow(t, cfg, "port1->port2", "port1", "port2", "100.64.1.1", "100.64.1.2", 1, 0)
+			addMPLSFlow(t, cfg, "port3->port2", "port3", "port2", "100.64.2.1", "100.64.2.2", 1, 0)
 		},
 		inCheckFn: func(t *testing.T, otgc *otg.OTG) {
 			for _, f := range []string{"port1->port2", "port3->port2"} {
@@ -416,8 +419,8 @@ func TestMPLSFlowsThreePorts(t *testing.T) {
 		desc: "ten flows on each port",
 		inFlowFn: func(t *testing.T, cfg gosnappi.Config) {
 			for i := 0; i < 10; i++ {
-				addMPLSFlow(t, cfg, fmt.Sprintf("port1->port2_%d", i), "port1", "port2", fmt.Sprintf("100.64.%d.1", i), fmt.Sprintf("100.64.%d.2", i))
-				addMPLSFlow(t, cfg, fmt.Sprintf("port3->port2_%d", i), "port3", "port2", fmt.Sprintf("100.64.%d.1", i+20), fmt.Sprintf("100.64.%d.2", i+20))
+				addMPLSFlow(t, cfg, fmt.Sprintf("port1->port2_%d", i), "port1", "port2", fmt.Sprintf("100.64.%d.1", i), fmt.Sprintf("100.64.%d.2", i), 1, 0)
+				addMPLSFlow(t, cfg, fmt.Sprintf("port3->port2_%d", i), "port3", "port2", fmt.Sprintf("100.64.%d.1", i+20), fmt.Sprintf("100.64.%d.2", i+20), 1, 0)
 			}
 		},
 		inCheckFn: func(t *testing.T, otgc *otg.OTG) {

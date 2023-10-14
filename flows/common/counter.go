@@ -65,24 +65,27 @@ func (f *counters) GetName() string {
 // updateTx updates the transmit counters for the flow according to the specified
 // packets per second rate and packet size.
 func (f *counters) updateTx(pps, size int) {
-	f.Tx.mu.Lock()
-	defer f.Tx.mu.Unlock()
+	// If clearStats were called during this function we could start working on
+	// a different Tx, so get the pointer now.
+	txStats := f.Tx
+	txStats.mu.Lock()
+	defer txStats.mu.Unlock()
 
 	now := flowTimeFn()
 
-	f.Tx.Rate = &val{ts: now, f: float32(pps)}
+	txStats.Rate = &val{ts: now, f: float32(pps)}
 
-	if f.Tx.Octets == nil {
-		f.Tx.Octets = &val{}
+	if txStats.Octets == nil {
+		txStats.Octets = &val{}
 	}
-	f.Tx.Octets.u += uint64(pps) * uint64(size)
-	f.Tx.Octets.ts = now
+	txStats.Octets.u += uint64(pps) * uint64(size)
+	txStats.Octets.ts = now
 
-	if f.Tx.Pkts == nil {
-		f.Tx.Pkts = &val{}
+	if txStats.Pkts == nil {
+		txStats.Pkts = &val{}
 	}
-	f.Tx.Pkts.u += uint64(pps)
-	f.Tx.Pkts.ts = now
+	txStats.Pkts.u += uint64(pps)
+	txStats.Pkts.ts = now
 }
 
 // updateRx updates counters for received packets. It is to be called for each
@@ -97,17 +100,21 @@ func (f *counters) updateRx(ts time.Time, size int) {
 	}
 	f.Timeseries[ts.Unix()] += size
 
-	if f.Rx.Octets == nil {
-		f.Rx.Octets = &val{}
-	}
-	f.Rx.Octets.u += uint64(size)
-	f.Rx.Octets.ts = ts.UnixNano()
+	rxStats := f.Rx
+	rxStats.mu.Lock()
+	defer rxStats.mu.Unlock()
 
-	if f.Rx.Pkts == nil {
+	if rxStats.Octets == nil {
+		rxStats.Octets = &val{}
+	}
+	rxStats.Octets.u += uint64(size)
+	rxStats.Octets.ts = ts.UnixNano()
+
+	if rxStats.Pkts == nil {
 		f.Rx.Pkts = &val{}
 	}
-	f.Rx.Pkts.u += 1
-	f.Rx.Pkts.ts = ts.UnixNano()
+	rxStats.Pkts.u += 1
+	rxStats.Pkts.ts = ts.UnixNano()
 }
 
 func (f *counters) setTransmit(state bool) {
@@ -122,7 +129,7 @@ func (f *counters) setTransmit(state bool) {
 
 // clearStats zeros the stastitics for the flow.
 func (f *counters) clearStats(ts int64) {
-	if f.Tx != nil {
+	/*if f.Tx != nil {
 		f.Tx.mu.Lock()
 		defer f.Tx.mu.Unlock()
 	}
@@ -130,7 +137,9 @@ func (f *counters) clearStats(ts int64) {
 	if f.Rx != nil {
 		f.Rx.mu.Lock()
 		defer f.Rx.mu.Unlock()
-	}
+	}*/
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
 	f.Tx = &stats{
 		Octets: &val{ts: ts, u: 0},
@@ -225,48 +234,57 @@ func (f *counters) telemetry(target string) []*gpb.Notification {
 	}
 
 	if f.Tx != nil {
-		f.Tx.mu.RLock()
-		if f.Tx.Octets != nil {
-			// TX statistics
-			txo := &otgyang.Device{}
-			txo.GetOrCreateFlow(name).GetOrCreateCounters().OutOctets = ygot.Uint64(f.Tx.Octets.u)
-			upd = append(upd, &datapoint{d: txo, ts: f.Tx.Octets.ts})
-		}
+		f := func() {
+			txStats := f.Tx
+			txStats.mu.RLock()
+			defer txStats.mu.RUnlock()
+			if txStats.Octets != nil {
+				// TX statistics
+				txo := &otgyang.Device{}
+				txo.GetOrCreateFlow(name).GetOrCreateCounters().OutOctets = ygot.Uint64(txStats.Octets.u)
+				upd = append(upd, &datapoint{d: txo, ts: txStats.Octets.ts})
+			}
 
-		if f.Tx.Pkts != nil {
-			tp := &otgyang.Device{}
-			tp.GetOrCreateFlow(name).GetOrCreateCounters().OutPkts = ygot.Uint64(f.Tx.Pkts.u)
-			upd = append(upd, &datapoint{d: tp, ts: f.Tx.Pkts.ts})
-		}
+			if txStats.Pkts != nil {
+				tp := &otgyang.Device{}
+				tp.GetOrCreateFlow(name).GetOrCreateCounters().OutPkts = ygot.Uint64(txStats.Pkts.u)
+				upd = append(upd, &datapoint{d: tp, ts: txStats.Pkts.ts})
+			}
 
-		if f.Tx.Rate != nil {
-			tr := &otgyang.Device{}
-			tr.GetOrCreateFlow(name).OutRate = float32ToBinary(f.Tx.Rate.f)
-			upd = append(upd, &datapoint{d: tr, ts: f.Tx.Rate.ts})
+			if txStats.Rate != nil {
+				tr := &otgyang.Device{}
+				tr.GetOrCreateFlow(name).OutRate = float32ToBinary(txStats.Rate.f)
+				upd = append(upd, &datapoint{d: tr, ts: txStats.Rate.ts})
+			}
 		}
-		f.Tx.mu.RUnlock()
+		f()
+
 	}
 
 	if f.Rx != nil {
 		// RX statistics
-		f.Rx.mu.RLock()
+		f := func() {
+			rxStats := f.Rx
+			rxStats.mu.RLock()
+			defer rxStats.mu.RUnlock()
 
-		if f.Rx.Octets != nil {
-			r := &otgyang.Device{}
-			r.GetOrCreateFlow(name).GetOrCreateCounters().InOctets = ygot.Uint64(f.Rx.Octets.u)
-			upd = append(upd, &datapoint{d: r, ts: f.Rx.Octets.ts})
+			if rxStats.Octets != nil {
+				r := &otgyang.Device{}
+				r.GetOrCreateFlow(name).GetOrCreateCounters().InOctets = ygot.Uint64(rxStats.Octets.u)
+				upd = append(upd, &datapoint{d: r, ts: rxStats.Octets.ts})
+			}
+
+			if rxStats.Pkts != nil {
+				rp := &otgyang.Device{}
+				rp.GetOrCreateFlow(name).GetOrCreateCounters().InPkts = ygot.Uint64(rxStats.Pkts.u)
+				upd = append(upd, &datapoint{d: rp, ts: rxStats.Pkts.ts})
+			}
+
+			rr := &otgyang.Device{}
+			rr.GetOrCreateFlow(name).InRate = float32ToBinary(f.rxRate()) // express in bits per second rather than bytes
+			upd = append(upd, &datapoint{d: rr, ts: flowTimeFn()})
 		}
-
-		if f.Rx.Pkts != nil {
-			rp := &otgyang.Device{}
-			rp.GetOrCreateFlow(name).GetOrCreateCounters().InPkts = ygot.Uint64(f.Rx.Pkts.u)
-			upd = append(upd, &datapoint{d: rp, ts: f.Rx.Pkts.ts})
-		}
-		f.Rx.mu.RUnlock()
-
-		rr := &otgyang.Device{}
-		rr.GetOrCreateFlow(name).InRate = float32ToBinary(f.rxRate()) // express in bits per second rather than bytes
-		upd = append(upd, &datapoint{d: rr, ts: flowTimeFn()})
+		f()
 	}
 
 	notis := []*gpb.Notification{}
