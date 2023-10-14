@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/lwotg"
@@ -300,21 +299,6 @@ var (
 	// timeFn is a function that returns a time.Time that can be overloaded in unit tests.
 	timeFn = time.Now
 )
-
-// flowInfo is a helper that returns a logging string containing the IPv4 or
-// IPv6 source and destination of a packet.
-func flowInfo(p gopacket.Packet) string {
-
-	layer := p.Layer(layers.LayerTypeIPv4)
-	switch recv := layer.(type) {
-	case *layers.IPv4:
-		return fmt.Sprintf("%s->%s", recv.SrcIP, recv.DstIP)
-	case *layers.IPv6:
-		return fmt.Sprintf("%s->%s", recv.SrcIP, recv.DstIP)
-	default:
-		return ""
-	}
-}
 
 // rxPacket is called for each packet that is received. It takes arguments of the statistics
 // tracking the flow, the set of headers that are expected, and the received packet.
