@@ -118,12 +118,13 @@ func TestStartStopTraffic(t *testing.T) {
 
 	tests := []struct {
 		desc                string
-		inTrafficGenerators []TXRXFn
+		inTrafficGenerators []*TXRXWrapper
 		wantData            []string
 	}{{
 		desc: "single traffic generator function",
-		inTrafficGenerators: []TXRXFn{
-			func(tx, rx *FlowController) {
+		inTrafficGenerators: []*TXRXWrapper{{
+			Name: "flow",
+			Fn: func(tx, rx *FlowController) {
 				go func() {
 					addData("tx")
 					<-tx.Stop
@@ -133,12 +134,13 @@ func TestStartStopTraffic(t *testing.T) {
 					<-rx.Stop
 				}()
 			},
-		},
+		}},
 		wantData: []string{"tx", "rx"},
 	}, {
 		desc: "two traffic generator functions",
-		inTrafficGenerators: []TXRXFn{
-			func(tx, rx *FlowController) {
+		inTrafficGenerators: []*TXRXWrapper{{
+			Name: "FN1",
+			Fn: func(tx, rx *FlowController) {
 				wg.Add(2)
 				go func() {
 					addData("tx0")
@@ -153,7 +155,9 @@ func TestStartStopTraffic(t *testing.T) {
 					wg.Done()
 				}()
 			},
-			func(tx, rx *FlowController) {
+		}, {
+			Name: "FN2",
+			Fn: func(tx, rx *FlowController) {
 				wg.Add(2)
 				go func() {
 					addData("tx1")
@@ -168,11 +172,50 @@ func TestStartStopTraffic(t *testing.T) {
 					wg.Done()
 				}()
 			},
-		},
+		}},
 		wantData: []string{
 			"tx0", "rx0", "tx1", "rx1",
 			"exit-rx0", "exit-tx0", "exit-rx1", "exit-tx1", // check that the goroutines got stop signals.
 		},
+	}, {
+		desc: "many traffic generator functions",
+		inTrafficGenerators: func() []*TXRXWrapper {
+			f := []*TXRXWrapper{}
+			for i := 0; i < 254; i++ {
+				ns := fmt.Sprintf("%d", i)
+				f = append(f, &TXRXWrapper{
+					Name: fmt.Sprintf("f%d", i),
+					Fn: func(tx, rx *FlowController) {
+						wg.Add(2)
+						go func() {
+							addData("tx" + ns)
+							<-tx.Stop
+							addData("exit-tx" + ns)
+							wg.Done()
+						}()
+						go func() {
+							addData("rx" + ns)
+							<-rx.Stop
+							addData("exit-rx" + ns)
+							wg.Done()
+						}()
+					},
+				})
+			}
+			return f
+		}(),
+		wantData: func() []string {
+			s := []string{}
+			for i := 0; i < 254; i++ {
+				s = append(s, []string{
+					fmt.Sprintf("tx%d", i),
+					fmt.Sprintf("rx%d", i),
+					fmt.Sprintf("exit-tx%d", i),
+					fmt.Sprintf("exit-rx%d", i),
+				}...)
+			}
+			return s
+		}(),
 	}}
 
 	for _, tt := range tests {

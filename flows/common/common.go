@@ -15,8 +15,6 @@ import (
 )
 
 var (
-	// timeout specifies how long to wait for a PCAP handle.
-	pcapTimeout = 30 * time.Second
 	// packetBytes is the number of bytes to read from an input packet.
 	packetBytes int = 100
 )
@@ -63,7 +61,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		// TODO(robjs): In the future we should wrap the PCAP handle in a library so that we can test our
 		// logic by writing into a test. Today, we're relying on integration test coverage here.
 
-		genFunc := func(stop, rxReady chan struct{}) {
+		genFunc := func(controllerID string, stop, rxReady chan struct{}) {
 			// Don't proceed to set up the transmit function until the listener has already been created
 			// and is listening, this avoids us sending packets into the void when we know no-one is listening
 			// for them to account the flow.
@@ -125,15 +123,17 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("%s send exiting on %s", flow.Name, tx)
-					f.setTransmit(false)
+					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, tx)
+					// Do this asynchronously so that updating telemetry is not blocking.
+					go f.setTransmit(false)
 					return
 				default:
 					switch stopFlow {
 					case true:
 						// avoid busy looping.
-						time.Sleep(1 * time.Second)
+						time.Sleep(100 * time.Millisecond)
 					default:
+
 						klog.Infof("%s sending %d packets", flow.Name, pps)
 						sendStart := time.Now()
 						sent := 0
@@ -160,7 +160,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			}
 		}
 
-		recvFunc := func(stop, readyForTx chan struct{}) {
+		recvFunc := func(controllerID string, stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.Name, rx)
 			ih, err := pcap.NewInactiveHandle(rx)
 			if err != nil {
@@ -205,7 +205,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("%s Rx exiting on %s", flow.Name, rx)
+					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, rx)
 					return
 				case p := <-packetCh:
 					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
@@ -219,8 +219,8 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		return func(tx, rx *lwotg.FlowController) {
 			// Make the channel that is used for co-ordination between the sender and receiver.
 			ch := make(chan struct{})
-			go genFunc(tx.Stop, ch)
-			go recvFunc(rx.Stop, ch)
+			go genFunc(tx.ID, tx.Stop, ch)
+			go recvFunc(rx.ID, rx.Stop, ch)
 		}, true, nil
 	}
 }
@@ -283,6 +283,7 @@ func Rate(flow *otg.Flow, hdrs []gopacket.SerializableLayer) (uint64, error) {
 	return pps, nil
 }
 
+// flowPackets returns the number of packets that a flow should send. It returns 0 if no limit is supplied.
 func flowPackets(flow *otg.Flow) (uint32, error) {
 	if durT := flow.GetDuration().GetChoice(); durT != otg.FlowDuration_Choice_fixed_packets && durT != otg.FlowDuration_Choice_unspecified {
 		return 0, nil
@@ -304,7 +305,6 @@ var (
 // flowInfo is a helper that returns a logging string containing the IPv4 or
 // IPv6 source and destination of a packet.
 func flowInfo(p gopacket.Packet) string {
-
 	layer := p.Layer(layers.LayerTypeIPv4)
 	switch recv := layer.(type) {
 	case *layers.IPv4:

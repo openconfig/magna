@@ -80,7 +80,7 @@ type Server struct {
 	tgMu sync.Mutex
 	// trafficGenerators are the set of functions that will be called when the OTG server
 	// is requested to start generating traffic.
-	trafficGenerators []TXRXFn
+	trafficGenerators []*TXRXWrapper
 	// generatorChs are the channels to communicate with the traffic generation functions.
 	generatorChs []*FlowController
 }
@@ -175,7 +175,7 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 
 // setTrafficGenFns sets the functions that will be used to generate traffic
 // for the flows within the configuration.
-func (s *Server) setTrafficGenFns(fns []TXRXFn) {
+func (s *Server) setTrafficGenFns(fns []*TXRXWrapper) {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()
 	s.trafficGenerators = fns
