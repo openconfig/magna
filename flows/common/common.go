@@ -280,9 +280,15 @@ func Rate(flow *otg.Flow, hdrs []gopacket.SerializableLayer) (uint64, error) {
 	return pps, nil
 }
 
+// flowPackets returns the number of packets that should be sent for a
+// particular flow. If the specification is not provided it returns 0,
+// which should be interpreted as sending continuous packets.
+//
+// This function does not support delay or gap specifications that are
+// included in OTG, and will return an error for each.
 func flowPackets(flow *otg.Flow) (uint32, error) {
 	if durT := flow.GetDuration().GetChoice(); durT != otg.FlowDuration_Choice_fixed_packets && durT != otg.FlowDuration_Choice_unspecified {
-		return 0, nil
+		return 0, fmt.Errorf("unsupported flow duration %s", durT)
 	}
 
 	// 12 is the OTG default for the packet gap.
