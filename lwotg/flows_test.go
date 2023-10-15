@@ -1,9 +1,11 @@
 package lwotg
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -120,6 +122,7 @@ func TestStartStopTraffic(t *testing.T) {
 		desc                string
 		inTrafficGenerators []*TXRXWrapper
 		wantData            []string
+		after               func(*testing.T, *Server, chan struct{})
 	}{{
 		desc: "single traffic generator function",
 		inTrafficGenerators: []*TXRXWrapper{{
@@ -216,6 +219,48 @@ func TestStartStopTraffic(t *testing.T) {
 			}
 			return s
 		}(),
+	}, {
+		desc: "badly behaved traffic generator function",
+		inTrafficGenerators: []*TXRXWrapper{{
+			Name: "bad",
+			Fn: func(tx, rx *FlowController) {
+				wg.Add(2)
+				go func() {
+					addData("start-tx")
+					time.Sleep(10 * time.Second)
+					// We don't ever read from the stop channel - which is not correct.
+					wg.Done()
+				}()
+				go func() {
+					addData("start-rx")
+					<-rx.Stop
+					addData("exit-rx")
+					wg.Done()
+				}()
+			},
+		}},
+		wantData: []string{
+			"start-tx", "start-rx", "exit-rx",
+		},
+		// Check that after we have a stale traffic generator routine, we can still send a config
+		// request. This ensures that there are no stale locks held.
+		after: func(t *testing.T, s *Server, waitCh chan struct{}) {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			exited := make(chan struct{}, 1)
+			go func(ctx context.Context, exited, waitCh chan struct{}) {
+				select {
+				case <-exited:
+				case <-ctx.Done():
+					t.Errorf("context completed, configuration set hung, %v", ctx.Err())
+				}
+				waitCh <- struct{}{}
+			}(ctx, exited, waitCh)
+			_, _ = s.SetConfig(ctx, &otg.SetConfigRequest{
+				Config: &otg.Config{},
+			})
+			exited <- struct{}{}
+		},
 	}}
 
 	for _, tt := range tests {
@@ -224,7 +269,9 @@ func TestStartStopTraffic(t *testing.T) {
 			s := &Server{}
 			s.trafficGenerators = tt.inTrafficGenerators
 			s.startTraffic()
-			s.stopTraffic()
+			ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+			defer cancel()
+			s.stopTraffic(ctx)
 			// wait for the goroutines to exit such that we can be sure that we got
 			// all the append operations.
 			wg.Wait()
@@ -233,6 +280,12 @@ func TestStartStopTraffic(t *testing.T) {
 				return a < b
 			}), cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("did not get expected data, diff(-got,+want):\n%s", diff)
+			}
+
+			if tt.after != nil {
+				waitCh := make(chan struct{})
+				tt.after(t, s, waitCh)
+				<-waitCh
 			}
 		})
 	}

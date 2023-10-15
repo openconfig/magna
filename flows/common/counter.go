@@ -33,10 +33,9 @@ type counters struct {
 	// Headers is the set of headers expected for packets matching this flow.
 	Headers []gopacket.SerializableLayer
 
+	mu sync.RWMutex
 	// tx and rx store the counters for statistics relating to the flow.
 	Tx, Rx *stats
-
-	mu sync.RWMutex
 	// transmit indicates whether the flow is currently transmitting.
 	Transmit *val
 
@@ -65,12 +64,11 @@ func (f *counters) GetName() string {
 // updateTx updates the transmit counters for the flow according to the specified
 // packets per second rate and packet size.
 func (f *counters) updateTx(pps, size int) {
-	// If clearStats were called during this function we could start working on
-	// a different Tx, so get the pointer now.
+	f.mu.Lock()
+	klog.Infof("updateTx got lock on flow %s", f.GetName())
+	defer f.mu.Unlock()
+	defer func() { klog.Infof("updateTx released lock on flow %s", f.GetName()) }()
 	txStats := f.Tx
-	txStats.mu.Lock()
-	defer txStats.mu.Unlock()
-
 	now := flowTimeFn()
 
 	txStats.Rate = &val{ts: now, f: float32(pps)}
@@ -78,12 +76,14 @@ func (f *counters) updateTx(pps, size int) {
 	if txStats.Octets == nil {
 		txStats.Octets = &val{}
 	}
+
 	txStats.Octets.u += uint64(pps) * uint64(size)
 	txStats.Octets.ts = now
 
 	if txStats.Pkts == nil {
 		txStats.Pkts = &val{}
 	}
+
 	txStats.Pkts.u += uint64(pps)
 	txStats.Pkts.ts = now
 }
@@ -100,9 +100,11 @@ func (f *counters) updateRx(ts time.Time, size int) {
 	}
 	f.Timeseries[ts.Unix()] += size
 
+	f.mu.Lock()
+	klog.Infof("updateRx got lock on flow %s", f.GetName())
+	defer f.mu.Unlock()
+	defer func() { klog.Infof("updateTx released lock on flow %s", f.GetName()) }()
 	rxStats := f.Rx
-	rxStats.mu.Lock()
-	defer rxStats.mu.Unlock()
 
 	if rxStats.Octets == nil {
 		rxStats.Octets = &val{}
@@ -119,7 +121,9 @@ func (f *counters) updateRx(ts time.Time, size int) {
 
 func (f *counters) setTransmit(state bool) {
 	f.mu.Lock()
+	klog.Infof("setTransmit got lock on %s", f.GetName())
 	defer f.mu.Unlock()
+	defer func() { klog.Infof("setTransmit released lock on %s", f.GetName()) }()
 	if f.Transmit == nil {
 		f.Transmit = &val{}
 	}
@@ -129,16 +133,9 @@ func (f *counters) setTransmit(state bool) {
 
 // clearStats zeros the stastitics for the flow.
 func (f *counters) clearStats(ts int64) {
-	/*if f.Tx != nil {
-		f.Tx.mu.Lock()
-		defer f.Tx.mu.Unlock()
-	}
-
-	if f.Rx != nil {
-		f.Rx.mu.Lock()
-		defer f.Rx.mu.Unlock()
-	}*/
+	klog.Infof("clearStats got lock on %s", f.GetName())
 	f.mu.Lock()
+	defer func() { klog.Infof("clearStats released lock on %s", f.GetName()) }()
 	defer f.mu.Unlock()
 
 	f.Tx = &stats{
@@ -154,14 +151,8 @@ func (f *counters) clearStats(ts int64) {
 }
 
 // lossPct calculates the percentage loss that the flow has experienced.
-func (f *counters) lossPct() float32 {
-	f.Tx.mu.Lock()
-	defer f.Tx.mu.Unlock()
-
-	f.Rx.mu.Lock()
-	defer f.Rx.mu.Unlock()
-
-	return float32(f.Tx.Pkts.u-f.Rx.Pkts.u) / float32(f.Tx.Pkts.u) * 100.0
+func (f *counters) lossPct(txPkts, rxPkts uint64) float32 {
+	return float32(txPkts-rxPkts) / float32(txPkts) * 100.0
 }
 
 const (
@@ -203,90 +194,98 @@ func (f *counters) rxRate() float32 {
 	return float32(sum) / delta * 8.0
 }
 
-// telemetry generates the set of gNMI Notifications that describes the flow's current state.
-// The target argument specifies the Target value that should be included in the notifications.
-func (f *counters) telemetry(target string) []*gpb.Notification {
-	type datapoint struct {
-		d  *otgyang.Device
-		ts int64
-	}
+type datapoint struct {
+	d  *otgyang.Device
+	ts int64
+}
+
+func (f *counters) datapoints() (string, []*datapoint) {
+	f.mu.Lock()
+	klog.Infof("datapoints got lock on flow %s", f.GetName())
+	defer func() { klog.Infof("datapoints release lock on flow %s", f.GetName()) }()
+	defer f.mu.Unlock()
 
 	// Cannot generate statistics until the flow is initialised with a name.
 	if f.Name == nil {
-		return nil
+		return "", nil
 	}
 	name := f.Name.s
 
 	upd := []*datapoint{}
 
-	if f.Transmit != nil {
-		t := &otgyang.Device{}
-		t.GetOrCreateFlow(name).Transmit = ygot.Bool(f.Transmit.b)
-		upd = append(upd, &datapoint{d: t, ts: f.Transmit.ts})
-	}
-
-	if f.Tx != nil && f.Rx != nil {
-		if f.Tx.Pkts != nil && f.Rx.Pkts != nil {
-			l := &otgyang.Device{}
-			l.GetOrCreateFlow(name).LossPct = float32ToBinary(f.lossPct())
-			upd = append(upd, &datapoint{d: l, ts: flowTimeFn()})
+	/*
+		if f.Transmit != nil {
+			t := &otgyang.Device{}
+			t.GetOrCreateFlow(name).Transmit = ygot.Bool(f.Transmit.b)
+			upd = append(upd, &datapoint{d: t, ts: f.Transmit.ts})
 		}
-	}
+		if f.Tx != nil && f.Rx != nil {
+			if f.Tx.Pkts != nil && f.Rx.Pkts != nil {
+				l := &otgyang.Device{}
+				l.GetOrCreateFlow(name).LossPct = float32ToBinary(f.lossPct(f.Tx.Pkts.u, f.Rx.Pkts.u))
+				upd = append(upd, &datapoint{d: l, ts: flowTimeFn()})
+			}
+		}
+	*/
 
 	if f.Tx != nil {
-		f := func() {
-			txStats := f.Tx
-			txStats.mu.RLock()
-			defer txStats.mu.RUnlock()
-			if txStats.Octets != nil {
+		txStats := f.Tx
+		/*	if txStats.Octets != nil {
 				// TX statistics
 				txo := &otgyang.Device{}
 				txo.GetOrCreateFlow(name).GetOrCreateCounters().OutOctets = ygot.Uint64(txStats.Octets.u)
 				upd = append(upd, &datapoint{d: txo, ts: txStats.Octets.ts})
 			}
+		*/
 
-			if txStats.Pkts != nil {
-				tp := &otgyang.Device{}
-				tp.GetOrCreateFlow(name).GetOrCreateCounters().OutPkts = ygot.Uint64(txStats.Pkts.u)
-				upd = append(upd, &datapoint{d: tp, ts: txStats.Pkts.ts})
-			}
-
+		if txStats.Pkts != nil {
+			tp := &otgyang.Device{}
+			tp.GetOrCreateFlow(name).GetOrCreateCounters().OutPkts = ygot.Uint64(txStats.Pkts.u)
+			upd = append(upd, &datapoint{d: tp, ts: txStats.Pkts.ts})
+		}
+		/*
 			if txStats.Rate != nil {
 				tr := &otgyang.Device{}
 				tr.GetOrCreateFlow(name).OutRate = float32ToBinary(txStats.Rate.f)
 				upd = append(upd, &datapoint{d: tr, ts: txStats.Rate.ts})
 			}
-		}
-		f()
+		*/
 
 	}
 
 	if f.Rx != nil {
 		// RX statistics
-		f := func() {
-			rxStats := f.Rx
-			rxStats.mu.RLock()
-			defer rxStats.mu.RUnlock()
+		rxStats := f.Rx
 
+		/*
 			if rxStats.Octets != nil {
 				r := &otgyang.Device{}
 				r.GetOrCreateFlow(name).GetOrCreateCounters().InOctets = ygot.Uint64(rxStats.Octets.u)
 				upd = append(upd, &datapoint{d: r, ts: rxStats.Octets.ts})
 			}
-
-			if rxStats.Pkts != nil {
-				rp := &otgyang.Device{}
-				rp.GetOrCreateFlow(name).GetOrCreateCounters().InPkts = ygot.Uint64(rxStats.Pkts.u)
-				upd = append(upd, &datapoint{d: rp, ts: rxStats.Pkts.ts})
-			}
-
+		*/
+		if rxStats.Pkts != nil {
+			rp := &otgyang.Device{}
+			rp.GetOrCreateFlow(name).GetOrCreateCounters().InPkts = ygot.Uint64(rxStats.Pkts.u)
+			upd = append(upd, &datapoint{d: rp, ts: rxStats.Pkts.ts})
+		}
+		/*
 			rr := &otgyang.Device{}
 			rr.GetOrCreateFlow(name).InRate = float32ToBinary(f.rxRate()) // express in bits per second rather than bytes
 			upd = append(upd, &datapoint{d: rr, ts: flowTimeFn()})
-		}
-		f()
+		*/
 	}
 
+	return name, upd
+}
+
+// telemetry generates the set of gNMI Notifications that describes the flow's current state.
+// The target argument specifies the Target value that should be included in the notifications.
+func (f *counters) telemetry(target string) []*gpb.Notification {
+	name, upd := f.datapoints()
+	if name == "" {
+		return nil
+	}
 	notis := []*gpb.Notification{}
 	for _, u := range upd {
 		notifications, err := ygot.TogNMINotifications(u.d, u.ts, ygot.GNMINotificationsConfig{UsePathElem: true})

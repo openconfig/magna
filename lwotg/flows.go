@@ -1,7 +1,9 @@
 package lwotg
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"google.golang.org/grpc/codes"
@@ -121,19 +123,39 @@ func (s *Server) startTraffic() {
 	}
 }
 
-// stopTraffic stops the running generator functions.
-func (s *Server) stopTraffic() {
+func (s *Server) getGenerators() []*FlowController {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()
+	return append([]*FlowController{}, s.generatorChs...)
+}
+
+// stopTraffic stops the running generator functions.
+func (s *Server) stopTraffic(ctx context.Context) {
 
 	var wg sync.WaitGroup
-	for _, c := range s.generatorChs {
+	for _, c := range s.getGenerators() {
 		wg.Add(1)
 		go func(id string, stop chan struct{}) {
 			defer wg.Done()
-			stop <- struct{}{}
-			klog.Infof("successfully stopped %s", id)
+			exited := make(chan struct{}, 1)
+			go func() {
+				time.Sleep(5 * time.Second)
+				select {
+				case <-exited:
+				default:
+					klog.Infof("controller %s hasn't stopped after 5 seconds", id)
+				}
+			}()
+			select {
+			case stop <- struct{}{}:
+				klog.Infof("successfully stopped %s", id)
+				exited <- struct{}{}
+			case <-ctx.Done():
+				klog.Infof("timed out stopping %s", id)
+			}
 		}(c.ID, c.Stop)
 	}
+	klog.Infof("waiting for group.")
 	wg.Wait()
+	klog.Infof("group done.")
 }

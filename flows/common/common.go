@@ -3,7 +3,6 @@ package common
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -65,9 +64,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			// Don't proceed to set up the transmit function until the listener has already been created
 			// and is listening, this avoids us sending packets into the void when we know no-one is listening
 			// for them to account the flow.
-			klog.Infof("waiting for channel in flow %s", flow.Name)
 			<-rxReady
-			klog.Infof("proceeding for flow %s", flow.Name)
 
 			f := reporter.Flow(flow.Name)
 			klog.Infof("%s send function started.", flow.Name)
@@ -124,8 +121,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 				select {
 				case <-stop:
 					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, tx)
-					// Do this asynchronously so that updating telemetry is not blocking.
-					go f.setTransmit(false)
+					f.setTransmit(false)
 					return
 				default:
 					switch stopFlow {
@@ -133,7 +129,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 						// avoid busy looping.
 						time.Sleep(100 * time.Millisecond)
 					default:
-
 						klog.Infof("%s sending %d packets", flow.Name, pps)
 						sendStart := time.Now()
 						sent := 0
@@ -343,7 +338,6 @@ type val struct {
 
 // stats stores metrics that are tracked for an individual flow direction.
 type stats struct {
-	mu sync.RWMutex
 	// rate indicates the rate at which packets are being sent or received according
 	// to the specific context.
 	Rate *val

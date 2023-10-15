@@ -7,6 +7,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/intf"
@@ -114,6 +115,12 @@ func (s *Server) SetProtocolHandler(fn func(*otg.Config, otg.StateProtocolAll_St
 	s.protocolHandler = fn
 }
 
+var (
+	// stopTrafficTimeout is the time after which we stop blocking for a badly behaved flow handler. Bailing
+	// leaves a stale send or receive routine present, but protects the server from being infinitely blocked.
+	stopTrafficTimeout = 10 * time.Second
+)
+
 // SetControlState handles the SetControlState OTG RPC. This implementation only supports:
 //   - starting and stopping all protocols, by calling the protocolHandler function that has been specified.
 //   - starting and stopping all traffic, by calling startTraffic and stopTraffic.
@@ -138,7 +145,9 @@ func (s *Server) SetControlState(ctx context.Context, req *otg.SetControlStateRe
 		case otg.StateTrafficFlowTransmit_State_start:
 			s.startTraffic()
 		case otg.StateTrafficFlowTransmit_State_stop:
-			s.stopTraffic()
+			tCtx, cancel := context.WithTimeout(ctx, stopTrafficTimeout)
+			defer cancel()
+			s.stopTraffic(tCtx)
 		default:
 			return nil, status.Errorf(codes.Unimplemented, "traffic control modes other than start and stop are not implemented, got: %s", a)
 		}
@@ -155,21 +164,26 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request configuration received, %v", req)
 	}
 
+	klog.Infof("processing new config.")
 	for _, fn := range s.configHandlers {
 		if err := fn(req.Config); err != nil {
 			return nil, err
 		}
 	}
+	klog.Infof("processed config with handlers.")
 
 	flowMethods, err := s.handleFlows(req.GetConfig().GetFlows())
 	if err != nil {
 		return nil, err
 	}
+	klog.Infof("setting traffic generator functions to %v", flowMethods)
 	s.setTrafficGenFns(flowMethods)
+	klog.Infof("successful set functions")
 
 	// Cache the configuration.
 	s.cfg = req.Config
 
+	klog.Infof("returning from set config")
 	return &otg.SetConfigResponse{}, nil
 }
 
