@@ -99,11 +99,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 				klog.Errorf("cannot set packet length, err: %v", err)
 			}
 
-			// Set buffer to be 200MB of sent packets.
-			if err := ih.SetBufferSize(200e6); err != nil {
-				klog.Errorf("cannot set buffer size, err: %v", err)
-			}
-
 			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("%s Tx error: %v", flow.Name, err)
@@ -175,11 +170,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			if err := ih.SetSnapLen(packetBytes); err != nil {
 				klog.Errorf("cannot set packet length, err: %v", err)
-			}
-
-			// Set buffer to be 200MB of received packets.
-			if err := ih.SetBufferSize(200e6); err != nil {
-				klog.Errorf("cannot set buffer size, err: %v", err)
 			}
 
 			handle, err := ih.Activate()
