@@ -281,7 +281,6 @@ func TestFlowPackets(t *testing.T) {
 	fixedPkts := otg.FlowDuration_Choice_fixed_packets
 	unspecified := otg.FlowDuration_Choice_unspecified
 	fixedSeconds := otg.FlowDuration_Choice_fixed_seconds
-	_, _ = unspecified, fixedSeconds
 
 	tests := []struct {
 		desc     string

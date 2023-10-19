@@ -43,7 +43,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			return nil, false, fmt.Errorf("cannot calculate rate, %v", err)
 		}
 
-		numPackets, err := flowPackets(flow)
+		packetsToSend, err := flowPackets(flow)
 		if err != nil {
 			return nil, false, fmt.Errorf("cannot extract number of flow packets, %v", err)
 		}
@@ -101,11 +101,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 				klog.Errorf("cannot set packet length, err: %v", err)
 			}
 
-			// Set buffer to be 200MB of sent packets.
-			if err := ih.SetBufferSize(200e6); err != nil {
-				klog.Errorf("cannot set buffer size, err: %v", err)
-			}
-
 			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("%s Tx error: %v", flow.Name, err)
@@ -114,7 +109,9 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			defer handle.Close()
 
 			f.setTransmit(true)
-			totPackets := uint32(0)
+			// runSentPackets is the total number of packets that we have sent this run - i.e., since we
+			// were asked to start transmitting.
+			runSentPackets := uint32(0)
 			// stopFlow indicates whether we should stop sending packets on the flow, it is set
 			// when the flow specification says that we should only send a limited number of
 			// packets.
@@ -133,10 +130,12 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 					default:
 						klog.Infof("%s sending %d packets", flow.Name, pps)
 						sendStart := time.Now()
-						sent := 0
+						loopSentPackets := 0
 						for i := 1; i <= int(pps); i++ {
-							if numPackets != 0 && totPackets >= numPackets {
-								klog.Infof("%s: finished sending, sent %d packets", flow.Name, totPackets)
+							// packetsToSend == 0 means that we need to keep sending, as there is no limit specified
+							// by the user.
+							if packetsToSend != 0 && runSentPackets >= packetsToSend {
+								klog.Infof("%s: finished sending, sent %d packets", flow.Name, runSentPackets)
 								stopFlow = true
 								break
 							}
@@ -144,10 +143,10 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 								klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
 								return
 							}
-							totPackets += 1
-							sent += 1
+							runSentPackets += 1
+							loopSentPackets += 1
 						}
-						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.Name, sent, totPackets, time.Since(sendStart))
+						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.Name, loopSentPackets, runSentPackets, time.Since(sendStart))
 
 						f.updateTx(int(sent), size)
 						sleepDur := (1 * time.Second) - time.Since(sendStart)
@@ -177,11 +176,6 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			if err := ih.SetSnapLen(packetBytes); err != nil {
 				klog.Errorf("cannot set packet length, err: %v", err)
-			}
-
-			// Set buffer to be 200MB of received packets.
-			if err := ih.SetBufferSize(200e6); err != nil {
-				klog.Errorf("cannot set buffer size, err: %v", err)
 			}
 
 			handle, err := ih.Activate()

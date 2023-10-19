@@ -8,7 +8,7 @@ nodes: {
     value: "ATE"
   }
   config: {
-    image: "magna:scale"
+    image: "magna:latest"
     command: "/app/magna"
     args: "-alsologtostderr"
     args: "-v=2"
