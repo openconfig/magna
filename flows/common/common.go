@@ -148,7 +148,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 						}
 						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.Name, loopSentPackets, runSentPackets, time.Since(sendStart))
 
-						f.updateTx(int(sent), size)
+						f.updateTx(int(loopSentPackets), size)
 						sleepDur := (1 * time.Second) - time.Since(sendStart)
 						time.Sleep(sleepDur)
 					}
