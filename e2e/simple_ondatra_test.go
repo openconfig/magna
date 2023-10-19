@@ -185,6 +185,12 @@ func TestMirror(t *testing.T) {
 	stopTwoPortMirror(t, client)
 }
 
+// addMPLSFlow adds a new MPLS flow to the specified otgCfg. The flow is named
+// according to the name argument, and runs between a srcName and dstName port,
+// with the srcv4 IPv4 source address, and dstv4 destination address. The flow
+// runs at pps packets per second, until totPackets packets have been sent. If
+// totPackets is 0, packets are sent at pps until the flow is terminated
+// through OTG.
 func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string, pps uint64, totPackets uint32) {
 	mplsFlow := otgCfg.Flows().Add().SetName(name)
 	mplsFlow.Metrics().SetEnable(true)

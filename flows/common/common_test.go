@@ -277,3 +277,82 @@ func TestRxPacket(t *testing.T) {
 	}
 	timeFn = time.Now
 }
+func TestFlowPackets(t *testing.T) {
+	fixedPkts := otg.FlowDuration_Choice_fixed_packets
+	unspecified := otg.FlowDuration_Choice_unspecified
+	fixedSeconds := otg.FlowDuration_Choice_fixed_seconds
+
+	tests := []struct {
+		desc     string
+		inConfig *otg.Flow
+		wantPkts uint32
+		wantErr  bool
+	}{{
+		desc:     "default",
+		inConfig: &otg.Flow{},
+		wantPkts: 0,
+	}, {
+		desc: "specified values",
+		inConfig: &otg.Flow{
+			Duration: &otg.FlowDuration{
+				Choice: &fixedPkts,
+				FixedPackets: &otg.FlowFixedPackets{
+					Packets: proto.Uint32(100),
+				},
+			},
+		},
+		wantPkts: 100,
+	}, {
+		desc: "specified value with default gap",
+		inConfig: &otg.Flow{
+			Duration: &otg.FlowDuration{
+				Choice: &fixedPkts,
+				FixedPackets: &otg.FlowFixedPackets{
+					Packets: proto.Uint32(100),
+					Gap:     proto.Uint32(12),
+				},
+			},
+		},
+		wantPkts: 100,
+	}, {
+		desc: "gap explicitly 0",
+		inConfig: &otg.Flow{
+			Duration: &otg.FlowDuration{
+				Choice: &fixedPkts,
+				FixedPackets: &otg.FlowFixedPackets{
+					Packets: proto.Uint32(100),
+					Gap:     proto.Uint32(0),
+				},
+			},
+		},
+		wantPkts: 100,
+	}, {
+		desc: "unspecified type",
+		inConfig: &otg.Flow{
+			Duration: &otg.FlowDuration{
+				Choice: &unspecified,
+			},
+		},
+		wantPkts: 0,
+	}, {
+		desc: "unsupported type",
+		inConfig: &otg.Flow{
+			Duration: &otg.FlowDuration{
+				Choice: &fixedSeconds,
+			},
+		},
+		wantErr: true,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := flowPackets(tt.inConfig)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("did not get expected error, got: %v, wantErr? %v", got, tt.wantErr)
+			}
+			if got != tt.wantPkts {
+				t.Fatalf("did not get expected number of packets, got: %d, want: %d", got, tt.wantPkts)
+			}
+		})
+	}
+}
