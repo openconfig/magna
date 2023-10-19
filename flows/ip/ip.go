@@ -28,7 +28,9 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 	// into the cache.
 	t := gnmit.Task{
 		Run: func(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
-			ticker := time.NewTicker(1 * time.Second)
+			// Report telemetry every 2 seconds, this avoids lock contention.
+			// TODO(robjs): Make this configurable, with a specified minimum value.
+			ticker := time.NewTicker(2 * time.Second)
 			go func() {
 				// TODO(robjs): Check with wenbli how gnmit tasks are supposed to be told
 				// to exit.

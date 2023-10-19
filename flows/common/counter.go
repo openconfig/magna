@@ -65,9 +65,7 @@ func (f *counters) GetName() string {
 // packets per second rate and packet size.
 func (f *counters) updateTx(pps, size int) {
 	f.mu.Lock()
-	klog.Infof("updateTx got lock on flow %s", f.GetName())
 	defer f.mu.Unlock()
-	defer func() { klog.Infof("updateTx released lock on flow %s", f.GetName()) }()
 	txStats := f.Tx
 	now := flowTimeFn()
 
@@ -101,9 +99,7 @@ func (f *counters) updateRx(ts time.Time, size int) {
 	f.Timeseries[ts.Unix()] += size
 
 	f.mu.Lock()
-	klog.Infof("updateRx got lock on flow %s", f.GetName())
 	defer f.mu.Unlock()
-	defer func() { klog.Infof("updateTx released lock on flow %s", f.GetName()) }()
 	rxStats := f.Rx
 
 	if rxStats.Octets == nil {
@@ -121,7 +117,6 @@ func (f *counters) updateRx(ts time.Time, size int) {
 
 func (f *counters) setTransmit(state bool) {
 	f.mu.Lock()
-	klog.Infof("setTransmit got lock on %s", f.GetName())
 	defer f.mu.Unlock()
 	defer func() { klog.Infof("setTransmit released lock on %s", f.GetName()) }()
 	if f.Transmit == nil {
@@ -133,9 +128,7 @@ func (f *counters) setTransmit(state bool) {
 
 // clearStats zeros the stastitics for the flow.
 func (f *counters) clearStats(ts int64) {
-	klog.Infof("clearStats got lock on %s", f.GetName())
 	f.mu.Lock()
-	defer func() { klog.Infof("clearStats released lock on %s", f.GetName()) }()
 	defer f.mu.Unlock()
 
 	f.Tx = &stats{
@@ -199,10 +192,14 @@ type datapoint struct {
 	ts int64
 }
 
+// datapoints returns the set of telemetry updates with timestamps that need to be sent for this flow.
+//
+// TODO(robjs): with sufficient numbers of flows, then this function ends up holding the f.mu lock regularly
+// and causing lock contention with packets that are being sent and received. An alternate approach to either
+// batch updates from the Tx/Rx goroutines, or push updates from the Tx/Rx goroutines is needed to remove the
+// lock contention.
 func (f *counters) datapoints() (string, []*datapoint) {
 	f.mu.Lock()
-	klog.Infof("datapoints got lock on flow %s", f.GetName())
-	defer func() { klog.Infof("datapoints release lock on flow %s", f.GetName()) }()
 	defer f.mu.Unlock()
 
 	// Cannot generate statistics until the flow is initialised with a name.
@@ -213,43 +210,38 @@ func (f *counters) datapoints() (string, []*datapoint) {
 
 	upd := []*datapoint{}
 
-	/*
-		if f.Transmit != nil {
-			t := &otgyang.Device{}
-			t.GetOrCreateFlow(name).Transmit = ygot.Bool(f.Transmit.b)
-			upd = append(upd, &datapoint{d: t, ts: f.Transmit.ts})
+	if f.Transmit != nil {
+		t := &otgyang.Device{}
+		t.GetOrCreateFlow(name).Transmit = ygot.Bool(f.Transmit.b)
+		upd = append(upd, &datapoint{d: t, ts: f.Transmit.ts})
+	}
+	if f.Tx != nil && f.Rx != nil {
+		if f.Tx.Pkts != nil && f.Rx.Pkts != nil {
+			l := &otgyang.Device{}
+			l.GetOrCreateFlow(name).LossPct = float32ToBinary(f.lossPct(f.Tx.Pkts.u, f.Rx.Pkts.u))
+			upd = append(upd, &datapoint{d: l, ts: flowTimeFn()})
 		}
-		if f.Tx != nil && f.Rx != nil {
-			if f.Tx.Pkts != nil && f.Rx.Pkts != nil {
-				l := &otgyang.Device{}
-				l.GetOrCreateFlow(name).LossPct = float32ToBinary(f.lossPct(f.Tx.Pkts.u, f.Rx.Pkts.u))
-				upd = append(upd, &datapoint{d: l, ts: flowTimeFn()})
-			}
-		}
-	*/
+	}
 
 	if f.Tx != nil {
 		txStats := f.Tx
-		/*	if txStats.Octets != nil {
-				// TX statistics
-				txo := &otgyang.Device{}
-				txo.GetOrCreateFlow(name).GetOrCreateCounters().OutOctets = ygot.Uint64(txStats.Octets.u)
-				upd = append(upd, &datapoint{d: txo, ts: txStats.Octets.ts})
-			}
-		*/
+		if txStats.Octets != nil {
+			// TX statistics
+			txo := &otgyang.Device{}
+			txo.GetOrCreateFlow(name).GetOrCreateCounters().OutOctets = ygot.Uint64(txStats.Octets.u)
+			upd = append(upd, &datapoint{d: txo, ts: txStats.Octets.ts})
+		}
 
 		if txStats.Pkts != nil {
 			tp := &otgyang.Device{}
 			tp.GetOrCreateFlow(name).GetOrCreateCounters().OutPkts = ygot.Uint64(txStats.Pkts.u)
 			upd = append(upd, &datapoint{d: tp, ts: txStats.Pkts.ts})
 		}
-		/*
-			if txStats.Rate != nil {
-				tr := &otgyang.Device{}
-				tr.GetOrCreateFlow(name).OutRate = float32ToBinary(txStats.Rate.f)
-				upd = append(upd, &datapoint{d: tr, ts: txStats.Rate.ts})
-			}
-		*/
+		if txStats.Rate != nil {
+			tr := &otgyang.Device{}
+			tr.GetOrCreateFlow(name).OutRate = float32ToBinary(txStats.Rate.f)
+			upd = append(upd, &datapoint{d: tr, ts: txStats.Rate.ts})
+		}
 
 	}
 
@@ -257,23 +249,19 @@ func (f *counters) datapoints() (string, []*datapoint) {
 		// RX statistics
 		rxStats := f.Rx
 
-		/*
-			if rxStats.Octets != nil {
-				r := &otgyang.Device{}
-				r.GetOrCreateFlow(name).GetOrCreateCounters().InOctets = ygot.Uint64(rxStats.Octets.u)
-				upd = append(upd, &datapoint{d: r, ts: rxStats.Octets.ts})
-			}
-		*/
+		if rxStats.Octets != nil {
+			r := &otgyang.Device{}
+			r.GetOrCreateFlow(name).GetOrCreateCounters().InOctets = ygot.Uint64(rxStats.Octets.u)
+			upd = append(upd, &datapoint{d: r, ts: rxStats.Octets.ts})
+		}
 		if rxStats.Pkts != nil {
 			rp := &otgyang.Device{}
 			rp.GetOrCreateFlow(name).GetOrCreateCounters().InPkts = ygot.Uint64(rxStats.Pkts.u)
 			upd = append(upd, &datapoint{d: rp, ts: rxStats.Pkts.ts})
 		}
-		/*
-			rr := &otgyang.Device{}
-			rr.GetOrCreateFlow(name).InRate = float32ToBinary(f.rxRate()) // express in bits per second rather than bytes
-			upd = append(upd, &datapoint{d: rr, ts: flowTimeFn()})
-		*/
+		rr := &otgyang.Device{}
+		rr.GetOrCreateFlow(name).InRate = float32ToBinary(f.rxRate()) // express in bits per second rather than bytes
+		upd = append(upd, &datapoint{d: rr, ts: flowTimeFn()})
 	}
 
 	return name, upd
@@ -282,6 +270,7 @@ func (f *counters) datapoints() (string, []*datapoint) {
 // telemetry generates the set of gNMI Notifications that describes the flow's current state.
 // The target argument specifies the Target value that should be included in the notifications.
 func (f *counters) telemetry(target string) []*gpb.Notification {
+	// Call datapoints to avoid holding the counters.mu mutex longer than we need to.
 	name, upd := f.datapoints()
 	if name == "" {
 		return nil
