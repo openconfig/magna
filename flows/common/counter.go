@@ -195,9 +195,10 @@ type datapoint struct {
 // datapoints returns the set of telemetry updates with timestamps that need to be sent for this flow.
 //
 // TODO(robjs): with sufficient numbers of flows, then this function ends up holding the f.mu lock regularly
-// and causing lock contention with packets that are being sent and received. An alternate approach to either
-// batch updates from the Tx/Rx goroutines, or push updates from the Tx/Rx goroutines is needed to remove the
-// lock contention.
+// and causing lock contention with packets that are being sent and received.
+// To avoid the lock contention an alternate approach is needed. Particularly,
+// either batch updates from the Tx/Rx goroutines, or push updates from the
+// Tx/Rx goroutines.
 func (f *counters) datapoints() (string, []*datapoint) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

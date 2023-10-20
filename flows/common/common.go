@@ -206,6 +206,10 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		return func(tx, rx *lwotg.FlowController) {
 			// Make the channel that is used for co-ordination between the sender and receiver.
 			ch := make(chan struct{})
+			// TODO(robjs): Currently, we potentially leave a packet in the channel that is being
+			// read from since rx.Stop is acted on immediately. This can cause send+recv numbers
+			// not to match exactly just based on this timing. See https://github.com/openconfig/magna/pull/39
+			// for discussion of whether this is an issue.
 			go genFunc(tx.ID, tx.Stop, ch)
 			go recvFunc(rx.ID, rx.Stop, ch)
 		}, true, nil
