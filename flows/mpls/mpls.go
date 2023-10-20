@@ -36,7 +36,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 	// into the cache.
 	t := gnmit.Task{
 		Run: func(_ gnmit.Queue, updateFn gnmit.UpdateFn, target string, cleanup func()) error {
-			// Report telemetry every two seconds -- this avoids us creating too much contention
+			// Report telemetry every 2 seconds -- this avoids us creating too much contention
 			// around the statistics lock.
 			//
 			// TODO(robjs): Make this configurable in the future and with a minimum value that

@@ -468,8 +468,6 @@ func TestTelemetry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			got := tt.in.telemetry(tt.inTarget)
-			t.Logf("got: %s\n", shortNoti(got))
-			t.Logf("want: %s\n", shortNoti(tt.want))
 			if !testutil.NotificationSetEqual(got, tt.want) {
 				t.Fatalf("did not get expected set of notifications, got: \n%s\nwant:\n%s", shortNoti(got), shortNoti(tt.want))
 			}

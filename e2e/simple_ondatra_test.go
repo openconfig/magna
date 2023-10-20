@@ -233,10 +233,10 @@ const (
 	lossTolerance = 1
 )
 
-// TestMPLS is a simple test that creates an MPLS flow between two ATE ports and
+// TestBasicMPLS is a simple test that creates an MPLS flow between two ATE ports and
 // checks that there is no packet loss. It validates magna's end-to-end MPLS
 // flow accounting.
-func TestMPLS(t *testing.T) {
+func TestBasicMPLS(t *testing.T) {
 	// Start a mirroring session to copy packets.
 	maddr := mirrorAddr(t)
 	client, stop := mirrorClient(t, maddr)
@@ -249,7 +249,7 @@ func TestMPLS(t *testing.T) {
 
 	otg := ondatra.ATE(t, "ate").OTG()
 	otgCfg.Flows().Clear().Items()
-	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, 0)
+	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, 5)
 
 	otg.PushConfig(t, otgCfg)
 
@@ -261,7 +261,7 @@ func TestMPLS(t *testing.T) {
 	otg.StopTraffic(t)
 
 	// Avoid a race with telemetry updates.
-	time.Sleep(1 * time.Second)
+	time.Sleep(10 * time.Second)
 	metrics := gnmi.Get(t, otg, gnmi.OTG().Flow("MPLS_FLOW").State())
 	got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()
 	if lossPackets := want - got; lossPackets > lossTolerance {
@@ -463,7 +463,7 @@ func TestMPLSFlowsThreePorts(t *testing.T) {
 			t.Logf("Stopping MPLS traffic...")
 			otg.StopTraffic(t)
 
-			time.Sleep(1 * time.Second)
+			time.Sleep(10 * time.Second)
 
 			tt.inCheckFn(t, otg)
 

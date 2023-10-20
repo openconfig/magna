@@ -118,7 +118,6 @@ func (f *counters) updateRx(ts time.Time, size int) {
 func (f *counters) setTransmit(state bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	defer func() { klog.Infof("setTransmit released lock on %s", f.GetName()) }()
 	if f.Transmit == nil {
 		f.Transmit = &val{}
 	}
