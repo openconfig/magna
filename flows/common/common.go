@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/lwotg"
@@ -15,8 +14,6 @@ import (
 )
 
 var (
-	// timeout specifies how long to wait for a PCAP handle.
-	pcapTimeout = 30 * time.Second
 	// packetBytes is the number of bytes to read from an input packet.
 	packetBytes int = 100
 )
@@ -46,6 +43,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			return nil, false, fmt.Errorf("cannot calculate rate, %v", err)
 		}
 
+		packetsToSend, err := flowPackets(flow)
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot extract number of flow packets, %v", err)
+		}
+
 		tx, rx, err := Ports(flow, intfs)
 		if err != nil {
 			return nil, false, fmt.Errorf("cannot determine ports, %v", err)
@@ -55,7 +57,17 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
 		reporter.AddFlow(flow.Name, fc)
 
-		genFunc := func(stop chan struct{}) {
+		// TODO(robjs): In the future we should wrap the PCAP handle in a library so that we can test our
+		// logic by writing into a test. Today, we're relying on integration test coverage here.
+
+		genFunc := func(stop, rxReady chan struct{}) {
+			// Don't proceed to set up the transmit function until the listener has already been created
+			// and is listening, this avoids us sending packets into the void when we know no-one is listening
+			// for them to account the flow.
+			klog.Infof("waiting for channel in flow %s", flow.Name)
+			<-rxReady
+			klog.Infof("proceeding for flow %s", flow.Name)
+
 			f := reporter.Flow(flow.Name)
 			klog.Infof("%s send function started.", flow.Name)
 			f.clearStats(time.Now().UnixNano())
@@ -68,7 +80,28 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			size := len(buf.Bytes())
 
 			klog.Infof("%s Tx interface %s", flow.Name, tx)
-			handle, err := pcap.OpenLive(tx, 1500, true, pcapTimeout)
+
+			ih, err := pcap.NewInactiveHandle(tx)
+			if err != nil {
+				klog.Errorf("cannot create handle, err: %v", err)
+				return
+			}
+			defer ih.CleanUp()
+			if err := ih.SetImmediateMode(true); err != nil {
+				klog.Errorf("cannot set immediate mode on handle, err: %v", err)
+				return
+			}
+
+			if err := ih.SetPromisc(false); err != nil {
+				klog.Errorf("cannot set promiscous mode, err: %v", err)
+				return
+			}
+
+			if err := ih.SetSnapLen(packetBytes); err != nil {
+				klog.Errorf("cannot set packet length, err: %v", err)
+			}
+
+			handle, err := ih.Activate()
 			if err != nil {
 				klog.Errorf("%s Tx error: %v", flow.Name, err)
 				return
@@ -76,6 +109,13 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			defer handle.Close()
 
 			f.setTransmit(true)
+			// runSentPackets is the total number of packets that we have sent this run - i.e., since we
+			// were asked to start transmitting.
+			runSentPackets := uint32(0)
+			// stopFlow indicates whether we should stop sending packets on the flow, it is set
+			// when the flow specification says that we should only send a limited number of
+			// packets.
+			var stopFlow bool
 			for {
 				select {
 				case <-stop:
@@ -83,21 +123,40 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 					f.setTransmit(false)
 					return
 				default:
-					klog.Infof("%s sending %d packets", flow.Name, pps)
-					for i := 1; i <= int(pps); i++ {
-						if err := handle.WritePacketData(buf.Bytes()); err != nil {
-							klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
-							return
+					switch stopFlow {
+					case true:
+						// avoid busy looping.
+						time.Sleep(1 * time.Second)
+					default:
+						klog.Infof("%s sending %d packets", flow.Name, pps)
+						sendStart := time.Now()
+						loopSentPackets := 0
+						for i := 1; i <= int(pps); i++ {
+							// packetsToSend == 0 means that we need to keep sending, as there is no limit specified
+							// by the user.
+							if packetsToSend != 0 && runSentPackets >= packetsToSend {
+								klog.Infof("%s: finished sending, sent %d packets", flow.Name, runSentPackets)
+								stopFlow = true
+								break
+							}
+							if err := handle.WritePacketData(buf.Bytes()); err != nil {
+								klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
+								return
+							}
+							runSentPackets += 1
+							loopSentPackets += 1
 						}
-					}
+						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.Name, loopSentPackets, runSentPackets, time.Since(sendStart))
 
-					f.updateTx(int(pps), size)
-					// TODO(robjs): This assumes that sending the packets take zero time. We should consider being more accurate here.
-					time.Sleep(1 * time.Second)
+						f.updateTx(int(loopSentPackets), size)
+						sleepDur := (1 * time.Second) - time.Since(sendStart)
+						time.Sleep(sleepDur)
+					}
 				}
 			}
 		}
-		recvFunc := func(stop chan struct{}) {
+
+		recvFunc := func(stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.Name, rx)
 			ih, err := pcap.NewInactiveHandle(rx)
 			if err != nil {
@@ -129,6 +188,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()
 			f := reporter.Flow(flow.Name)
+
+			// Close the readyForTx channel so that the transmitter knows that we are ready to
+			// receive packets.
+			close(readyForTx)
+
 			for {
 				select {
 				case <-stop:
@@ -144,8 +208,10 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		}
 
 		return func(tx, rx *lwotg.FlowController) {
-			go genFunc(tx.Stop)
-			go recvFunc(rx.Stop)
+			// Make the channel that is used for co-ordination between the sender and receiver.
+			ch := make(chan struct{})
+			go genFunc(tx.Stop, ch)
+			go recvFunc(rx.Stop, ch)
 		}, true, nil
 	}
 }
@@ -208,34 +274,36 @@ func Rate(flow *otg.Flow, hdrs []gopacket.SerializableLayer) (uint64, error) {
 	return pps, nil
 }
 
+// flowPackets returns the number of packets that should be sent for a
+// particular flow. If the specification is not provided it returns 0,
+// which should be interpreted as sending continuous packets.
+//
+// This function does not support delay or gap specifications that are
+// included in OTG, and will return an error for each.
+func flowPackets(flow *otg.Flow) (uint32, error) {
+	if durT := flow.GetDuration().GetChoice(); durT != otg.FlowDuration_Choice_fixed_packets && durT != otg.FlowDuration_Choice_unspecified {
+		return 0, fmt.Errorf("unsupported flow duration %s", durT)
+	}
+
+	// 12 is the OTG default for the packet gap.
+	if (flow.GetDuration().GetFixedPackets().GetGap() != 0 && flow.GetDuration().GetFixedPackets().GetGap() != 12) || flow.GetDuration().GetFixedPackets().GetDelay() != nil {
+		return 0, fmt.Errorf("gap and delay specifications are unsupported, got gap: %v, delay: %v", flow.GetDuration().GetFixedPackets().GetGap(), flow.GetDuration().GetFixedPackets().GetDelay())
+	}
+
+	return flow.GetDuration().GetFixedPackets().GetPackets(), nil
+}
+
 var (
 	// timeFn is a function that returns a time.Time that can be overloaded in unit tests.
 	timeFn = time.Now
 )
 
-// flowInfo is a helper that returns a logging string containing the IPv4 or
-// IPv6 source and destination of a packet.
-func flowInfo(p gopacket.Packet) string {
-
-	layer := p.Layer(layers.LayerTypeIPv4)
-	switch recv := layer.(type) {
-	case *layers.IPv4:
-		return fmt.Sprintf("%s->%s", recv.SrcIP, recv.DstIP)
-	case *layers.IPv6:
-		return fmt.Sprintf("%s->%s", recv.SrcIP, recv.DstIP)
-	default:
-		return ""
-	}
-}
-
 // rxPacket is called for each packet that is received. It takes arguments of the statistics
 // tracking the flow, the set of headers that are expected, and the received packet.
 func rxPacket(f *counters, p gopacket.Packet, match bool) error {
-	klog.Infof("flow %s: packet %s -> match? %v", f.GetName(), flowInfo(p), match)
 	if !match {
 		return nil
 	}
-	klog.Infof("flow %s: received packet with size %d", f.GetName(), len(p.Data()))
 
 	f.updateRx(timeFn(), len(p.Data()))
 	return nil
