@@ -67,6 +67,7 @@ func (f *counters) updateTx(pps, size int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	txStats := f.Tx
+
 	now := flowTimeFn()
 
 	txStats.Rate = &val{ts: now, f: float32(pps)}
@@ -241,7 +242,6 @@ func (f *counters) datapoints() (string, []*datapoint) {
 			tr.GetOrCreateFlow(name).OutRate = float32ToBinary(txStats.Rate.f)
 			upd = append(upd, &datapoint{d: tr, ts: txStats.Rate.ts})
 		}
-
 	}
 
 	if f.Rx != nil {
