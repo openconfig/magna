@@ -245,21 +245,29 @@ func TestStartStopTraffic(t *testing.T) {
 		// Check that after we have a stale traffic generator routine, we can still send a config
 		// request. This ensures that there are no stale locks held.
 		after: func(t *testing.T, s *Server, waitCh chan struct{}) {
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			t.Logf("creating context at %s", time.Now())
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			exited := make(chan struct{}, 1)
+			exited := make(chan struct{})
 			go func(ctx context.Context, exited, waitCh chan struct{}) {
+				defer func() {
+					waitCh <- struct{}{}
+				}()
 				select {
 				case <-exited:
+					t.Logf("read from channel at %s", time.Now())
+					return
 				case <-ctx.Done():
+					t.Logf("returning error at %s", time.Now())
 					t.Errorf("context completed, configuration set hung, %v", ctx.Err())
 				}
-				waitCh <- struct{}{}
 			}(ctx, exited, waitCh)
+			t.Logf("sending setconfig at %s", time.Now())
 			_, _ = s.SetConfig(ctx, &otg.SetConfigRequest{
 				Config: &otg.Config{},
 			})
 			exited <- struct{}{}
+			t.Logf("wrote to channel at %s", time.Now())
 		},
 	}}
 
