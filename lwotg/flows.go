@@ -1,13 +1,20 @@
 package lwotg
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
 )
+
+type TXRXWrapper struct {
+	Fn   TXRXFn
+	Name string
+}
 
 // TXRXFn is a function that handles the send and receive of packets for a particular flow.
 // When called it should begin tranmitting packets using the tx FlowController channels, and
@@ -19,14 +26,17 @@ type TXRXFn func(tx, rx *FlowController)
 
 // FlowController acts as the control mechanism for a specific direction of a specific flow.
 type FlowController struct {
+	// ID is a unique ID for the controller that allows tracing through the system.
+	ID string
 	// Stop is a channel used to indicate that the function that has been called should
 	// cease to send or receive packets.
 	Stop chan struct{}
 }
 
 // NewFlowController returns an initialised FlowController.
-func NewFlowController() *FlowController {
+func NewFlowController(id string) *FlowController {
 	return &FlowController{
+		ID:   id,
 		Stop: make(chan struct{}),
 	}
 }
@@ -56,13 +66,13 @@ func (s *Server) AddFlowHandlers(fns ...FlowGeneratorFn) {
 
 // handleFlows takes the set of flows provided and returns the TXRX functions that control them.
 // It returns an error if a flow cannot be handled by the registered set of flow handlers.
-func (s *Server) handleFlows(flows []*otg.Flow) ([]TXRXFn, error) {
+func (s *Server) handleFlows(flows []*otg.Flow) ([]*TXRXWrapper, error) {
 	s.fhMu.Lock()
 	defer s.fhMu.Unlock()
 
 	seenNames := map[string]struct{}{}
 
-	flowMethods := []TXRXFn{}
+	flowMethods := []*TXRXWrapper{}
 	intfs := s.interfaces()
 	for _, flow := range flows {
 		var handled bool
@@ -80,7 +90,10 @@ func (s *Server) handleFlows(flows []*otg.Flow) ([]TXRXFn, error) {
 				continue
 			default:
 				klog.Infof("flow %s was handled", flow.GetName())
-				flowMethods = append(flowMethods, txrx)
+				flowMethods = append(flowMethods, &TXRXWrapper{
+					Name: flow.GetName(),
+					Fn:   txrx,
+				})
 				handled = true
 			}
 			if handled {
@@ -102,26 +115,47 @@ func (s *Server) startTraffic() {
 
 	s.generatorChs = []*FlowController{}
 	klog.Infof("starting traffic...")
-	for _, fn := range s.trafficGenerators {
-		tx, rx := NewFlowController(), NewFlowController()
-		go fn(tx, rx)
+	for _, g := range s.trafficGenerators {
+		tx, rx := NewFlowController(g.Name+"_tx"), NewFlowController(g.Name+"_rx")
+		go g.Fn(tx, rx)
 		s.generatorChs = append(s.generatorChs, []*FlowController{tx, rx}...)
 		klog.Infof("started listener number %d", len(s.generatorChs))
 	}
 }
 
-// stopTraffic stops the running generator functions.
-func (s *Server) stopTraffic() {
+func (s *Server) getGenerators() []*FlowController {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()
+	return append([]*FlowController{}, s.generatorChs...)
+}
+
+// stopTraffic stops the running generator functions.
+func (s *Server) stopTraffic(ctx context.Context) {
 
 	var wg sync.WaitGroup
-	for _, c := range s.generatorChs {
+	for _, c := range s.getGenerators() {
 		wg.Add(1)
-		go func(stop chan struct{}) {
+		go func(id string, stop chan struct{}) {
 			defer wg.Done()
-			stop <- struct{}{}
-		}(c.Stop)
+			exited := make(chan struct{}, 1)
+			go func() {
+				time.Sleep(5 * time.Second)
+				select {
+				case <-exited:
+				default:
+					klog.Infof("controller %s hasn't stopped after 5 seconds", id)
+				}
+			}()
+			select {
+			case stop <- struct{}{}:
+				klog.Infof("successfully stopped %s", id)
+				exited <- struct{}{}
+			case <-ctx.Done():
+				klog.Infof("timed out stopping %s", id)
+			}
+		}(c.ID, c.Stop)
 	}
+	klog.Infof("waiting for group.")
 	wg.Wait()
+	klog.Infof("group done.")
 }

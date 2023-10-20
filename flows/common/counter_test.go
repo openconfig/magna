@@ -241,7 +241,7 @@ func TestLossPct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got := tt.in.lossPct(); !cmp.Equal(got, tt.want, cmpopts.EquateApprox(0.01, 0)) {
+			if got := tt.in.lossPct(tt.in.Tx.Pkts.u, tt.in.Rx.Pkts.u); !cmp.Equal(got, tt.want, cmpopts.EquateApprox(0.01, 0)) {
 				t.Fatalf("did not get expected loss, got: %.3f, want: %.3f", got, tt.want)
 			}
 		})
@@ -467,7 +467,8 @@ func TestTelemetry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if got := tt.in.telemetry(tt.inTarget); !testutil.NotificationSetEqual(got, tt.want) {
+			got := tt.in.telemetry(tt.inTarget)
+			if !testutil.NotificationSetEqual(got, tt.want) {
 				t.Fatalf("did not get expected set of notifications, got: \n%s\nwant:\n%s", shortNoti(got), shortNoti(tt.want))
 			}
 		})

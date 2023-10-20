@@ -7,6 +7,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/intf"
@@ -80,7 +81,7 @@ type Server struct {
 	tgMu sync.Mutex
 	// trafficGenerators are the set of functions that will be called when the OTG server
 	// is requested to start generating traffic.
-	trafficGenerators []TXRXFn
+	trafficGenerators []*TXRXWrapper
 	// generatorChs are the channels to communicate with the traffic generation functions.
 	generatorChs []*FlowController
 }
@@ -114,6 +115,12 @@ func (s *Server) SetProtocolHandler(fn func(*otg.Config, otg.StateProtocolAll_St
 	s.protocolHandler = fn
 }
 
+var (
+	// stopTrafficTimeout is the time after which we stop blocking for a badly behaved flow handler. Bailing
+	// leaves a stale send or receive routine present, but protects the server from being infinitely blocked.
+	stopTrafficTimeout = 10 * time.Second
+)
+
 // SetControlState handles the SetControlState OTG RPC. This implementation only supports:
 //   - starting and stopping all protocols, by calling the protocolHandler function that has been specified.
 //   - starting and stopping all traffic, by calling startTraffic and stopTraffic.
@@ -138,7 +145,9 @@ func (s *Server) SetControlState(ctx context.Context, req *otg.SetControlStateRe
 		case otg.StateTrafficFlowTransmit_State_start:
 			s.startTraffic()
 		case otg.StateTrafficFlowTransmit_State_stop:
-			s.stopTraffic()
+			tCtx, cancel := context.WithTimeout(ctx, stopTrafficTimeout)
+			defer cancel()
+			s.stopTraffic(tCtx)
 		default:
 			return nil, status.Errorf(codes.Unimplemented, "traffic control modes other than start and stop are not implemented, got: %s", a)
 		}
@@ -175,7 +184,7 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 
 // setTrafficGenFns sets the functions that will be used to generate traffic
 // for the flows within the configuration.
-func (s *Server) setTrafficGenFns(fns []TXRXFn) {
+func (s *Server) setTrafficGenFns(fns []*TXRXWrapper) {
 	s.tgMu.Lock()
 	defer s.tgMu.Unlock()
 	s.trafficGenerators = fns

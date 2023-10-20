@@ -30,7 +30,7 @@ func TestSetControlState(t *testing.T) {
 	tests := []struct {
 		desc              string
 		inProtocolHandler func(*otg.Config, otg.StateProtocolAll_State_Enum) error
-		inTrafficFunc     []TXRXFn
+		inTrafficFunc     []*TXRXWrapper
 		inRequest         *otg.SetControlStateRequest
 		wantResponse      *otg.SetControlStateResponse
 		wantErrCode       codes.Code
@@ -99,11 +99,12 @@ func TestSetControlState(t *testing.T) {
 		},
 	}, {
 		desc: "traffic state with handler",
-		inTrafficFunc: []TXRXFn{
-			func(_, _ *FlowController) {
+		inTrafficFunc: []*TXRXWrapper{{
+			Name: "flow handler",
+			Fn: func(_, _ *FlowController) {
 				state = "TRAFFIC_CALLED"
 			},
-		},
+		}},
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
 				Choice: otg.ControlState_Choice_traffic,

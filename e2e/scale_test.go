@@ -63,10 +63,18 @@ func TestScaleMPLS(t *testing.T) {
 		inPPS:               1,
 		inNumPacketsPerFlow: 6, // send for 6 seconds
 	}, {
-		desc:                "254 flows",
+		desc:                "254 flows, 1 pps",
 		inFlowCount:         254,
 		inPPS:               1,
 		inNumPacketsPerFlow: 5, // send for 5 seconds
+		/*
+				Currently beyond the scale limit.
+			}, {
+				desc:                "254 flows, 10 pps",
+				inFlowCount:         254,
+				inPPS:               10,
+				inNumPacketsPerFlow: 20, // send for 2 seconds
+		*/
 	}}
 
 	for _, tt := range tests {
@@ -97,7 +105,7 @@ func TestScaleMPLS(t *testing.T) {
 			otg.StopTraffic(t)
 
 			// Avoid a race with telemetry updates.
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 			for i := 0; i < tt.inFlowCount; i++ {
 				metrics := gnmi.Get(t, otg, gnmi.OTG().Flow(fmt.Sprintf("flow%d", i)).State())
 				got, want := metrics.GetCounters().GetInPkts(), metrics.GetCounters().GetOutPkts()

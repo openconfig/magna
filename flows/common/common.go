@@ -3,7 +3,6 @@ package common
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -60,13 +59,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		// TODO(robjs): In the future we should wrap the PCAP handle in a library so that we can test our
 		// logic by writing into a test. Today, we're relying on integration test coverage here.
 
-		genFunc := func(stop, rxReady chan struct{}) {
+		genFunc := func(controllerID string, stop, rxReady chan struct{}) {
 			// Don't proceed to set up the transmit function until the listener has already been created
 			// and is listening, this avoids us sending packets into the void when we know no-one is listening
 			// for them to account the flow.
-			klog.Infof("waiting for channel in flow %s", flow.Name)
 			<-rxReady
-			klog.Infof("proceeding for flow %s", flow.Name)
 
 			f := reporter.Flow(flow.Name)
 			klog.Infof("%s send function started.", flow.Name)
@@ -119,14 +116,14 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("%s send exiting on %s", flow.Name, tx)
+					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, tx)
 					f.setTransmit(false)
 					return
 				default:
 					switch stopFlow {
 					case true:
 						// avoid busy looping.
-						time.Sleep(1 * time.Second)
+						time.Sleep(100 * time.Millisecond)
 					default:
 						klog.Infof("%s sending %d packets", flow.Name, pps)
 						sendStart := time.Now()
@@ -156,7 +153,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			}
 		}
 
-		recvFunc := func(stop, readyForTx chan struct{}) {
+		recvFunc := func(controllerID string, stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.Name, rx)
 			ih, err := pcap.NewInactiveHandle(rx)
 			if err != nil {
@@ -196,12 +193,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("%s Rx exiting on %s", flow.Name, rx)
+					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, rx)
 					return
 				case p := <-packetCh:
 					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
 						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
-						return
 					}
 				}
 			}
@@ -210,8 +206,12 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		return func(tx, rx *lwotg.FlowController) {
 			// Make the channel that is used for co-ordination between the sender and receiver.
 			ch := make(chan struct{})
-			go genFunc(tx.Stop, ch)
-			go recvFunc(rx.Stop, ch)
+			// TODO(robjs): Currently, we potentially leave a packet in the channel that is being
+			// read from since rx.Stop is acted on immediately. This can cause send+recv numbers
+			// not to match exactly just based on this timing. See https://github.com/openconfig/magna/pull/39
+			// for discussion of whether this is an issue.
+			go genFunc(tx.ID, tx.Stop, ch)
+			go recvFunc(rx.ID, rx.Stop, ch)
 		}, true, nil
 	}
 }
@@ -326,7 +326,6 @@ type val struct {
 
 // stats stores metrics that are tracked for an individual flow direction.
 type stats struct {
-	mu sync.RWMutex
 	// rate indicates the rate at which packets are being sent or received according
 	// to the specific context.
 	Rate *val
