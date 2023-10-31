@@ -5,6 +5,7 @@
 package mpls
 
 import (
+	"bytes"
 	"crypto/rand"
 	"fmt"
 	"net"
@@ -22,6 +23,10 @@ import (
 const (
 	// defaultMPLSTTL is the TTL value used by default in the MPLS header.
 	defaultMPLSTTL uint8 = 64
+	// maxReceiveLabels is the maximum number MPLS labels that a received flow can have applied.
+	// It is used when generating BPF filters for received packets where we cannot match an
+	// arbitrary label depth.
+	maxReceiveLabels = 20
 )
 
 // New returns a new MPLS flow generator, consisting of:
@@ -55,7 +60,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 		},
 	}
 
-	return common.Handler(headers, packetInFlow, reporter), t, nil
+	return common.Handler(headers, bpfFilter, packetInFlow, reporter), t, nil
 }
 
 // headers returns the gopacket layers for the specified flow.
@@ -184,6 +189,48 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	pktLayers = append(pktLayers, gopacket.Payload(pl))
 
 	return pktLayers, nil
+}
+
+// bpfFilter generates a BPF filter that matches this flow. It returns an error if it cannot
+// build a filter.
+func bpfFilter(hdrs []gopacket.SerializableLayer) (string, error) {
+	if len(hdrs) < 2 {
+		return "", fmt.Errorf("insufficient layers to extract IPv4 headers, got %d", len(hdrs))
+	}
+	ipv4Hdr, ok := hdrs[len(hdrs)-2].(*layers.IPv4)
+	if !ok {
+		return "", fmt.Errorf("invalid headers, penultimate layer is not IPv4, got: %T", hdrs[len(hdrs)-2])
+	}
+
+	buf := &bytes.Buffer{}
+
+	// BPF when we use the 'mpls' keyword will set the offset to be +4b to look for the IP header, but this doesn't
+	// cleanly work when we're matching arbitrary numbers of labels -- so we need to create a number of filters.
+	// Primarly, we create them for MPLS packets.
+	srcIPBytes := fmt.Sprintf("0x%x", []byte(ipv4Hdr.SrcIP.To4()))
+	dstIPBytes := fmt.Sprintf("0x%x", []byte(ipv4Hdr.DstIP.To4()))
+	buf.WriteString("(mpls and (")
+	for i := 0; i < maxReceiveLabels; i++ {
+		// We have:
+		//	14 bytes of Ethernet header
+		//	Labels * (4 bytes) of MPLS headers
+		//	12 bytes of IP header minus the source and destination address
+		// Thus, for an MPLS packet (0x8847 Ethertype) we need to generate a filter that checks for a source address at
+		// 14+12+4 = 30 bytes offset for 1 label, and then destination address at 14+12+4+4 = 34 bytes. We increment
+		// both by 4 bytes for each subsequent label.
+		srcIPOffset := 30 + (i * 4)
+		dstIPOffset := 30 + (i * 4) + 4
+		buf.WriteString(fmt.Sprintf("(ether[%d:4] == %s and ether[%d:4] == %s)", srcIPOffset, srcIPBytes, dstIPOffset, dstIPBytes))
+		if i != maxReceiveLabels-1 {
+			buf.WriteString(" or ")
+		}
+	}
+	buf.WriteString(")) or ")
+	buf.WriteString(fmt.Sprintf("(ip and src host %s and dst host %s)", ipv4Hdr.SrcIP.String(), ipv4Hdr.DstIP.String()))
+
+	filter := buf.String()
+	klog.Infof("applying filter %s", filter)
+	return filter, nil
 }
 
 // packetInFlow checks whether the packet p matches the specification in hdrs by checking

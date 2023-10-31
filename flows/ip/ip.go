@@ -44,7 +44,7 @@ func New() (lwotg.FlowGeneratorFn, gnmit.Task, error) {
 		},
 	}
 
-	return common.Handler(headers, packetInFlow, reporter), t, nil
+	return common.Handler(headers, bpfFilter, packetInFlow, reporter), t, nil
 }
 
 func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
@@ -179,6 +179,21 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 	return pktLayers, nil
 }
 
+// bpfFilter returns a filter that matches a packet that is within the specified flow.
+func bpfFilter(hdrs []gopacket.SerializableLayer) (string, error) {
+	if len(hdrs) < 2 {
+		return "", fmt.Errorf("invalid number of layers, got: %d, expect: >=2", len(hdrs))
+	}
+	switch spec := hdrs[len(hdrs)-2].(type) {
+	case *layers.IPv4:
+		return fmt.Sprintf("ip src host %s and ip dst host %s", spec.SrcIP, spec.DstIP), nil
+	case *layers.IPv6:
+		return fmt.Sprintf("ip6 src host %s and ip6 dst host %s", spec.SrcIP, spec.DstIP), nil
+	default:
+		return "", fmt.Errorf("invalid penultimate layer, %T", spec)
+	}
+}
+
 // packetInFlow checks whether the packet p matches the specification in hdrs by checking
 // the inner IPv4 header in p matches the inner IP header in hdrs. The values of other
 // headers are not checked.
@@ -187,7 +202,9 @@ func packetInFlow(hdrs []gopacket.SerializableLayer, p gopacket.Packet) bool {
 		return false
 	}
 
-	innerSpec := hdrs[len(hdrs)-1] // choose the IPv4 header
+	// TODO: add unit tests, this previously read -1, but we expect the ultimate packet
+	// layer is the payload of the packet according to the spec generated above.
+	innerSpec := hdrs[len(hdrs)-2] // choose the IPv4 header
 	switch spec := innerSpec.(type) {
 	case *layers.IPv4:
 		recv := p.Layer(layers.LayerTypeIPv4)

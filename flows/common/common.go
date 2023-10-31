@@ -21,13 +21,17 @@ var (
 // also used to determine the correctness of the headers received.
 type hdrsFunc func(*otg.Flow) ([]gopacket.SerializableLayer, error)
 
-// matchFunc is a function which determines if a packet p matchs the headers
+// matchFunc is a function which determines if a packet p matches the headers
 // hdrs.
-type matchFunc func(hdrs []gopacket.SerializableLayer, p gopacket.Packet) bool
+type matchFunc func([]gopacket.SerializableLayer, gopacket.Packet) bool
+
+// bpfFunc is a function that generates a BPF filter that matches packets in
+// hdrs.
+type bpfFunc func([]gopacket.SerializableLayer) (string, error)
 
 // Handler creates a new flow generator function based on the header and match
 // function provided.
-func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGeneratorFn {
+func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lwotg.FlowGeneratorFn {
 	return func(flow *otg.Flow, intfs []*lwotg.OTGIntf) (lwotg.TXRXFn, bool, error) {
 		hdrs, err := fn(flow)
 		if err != nil {
@@ -173,6 +177,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			if err := ih.SetSnapLen(packetBytes); err != nil {
 				klog.Errorf("cannot set packet length, err: %v", err)
+				return
 			}
 
 			handle, err := ih.Activate()
@@ -181,6 +186,22 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 				return
 			}
 			defer handle.Close()
+
+			// Set a BPF filter on the handle, this avoids our code needing to compare every
+			// packet that it receives, and rather asks the PCAP library to filter for us.
+			// This avoids additional CPU being used by our code.
+			filter, err := bpfFn(hdrs)
+			switch {
+			case err != nil:
+				klog.Errorf("%s: cannot generate BPF filter, running unfiltered: %v", flow.Name, err)
+			case filter == "":
+				klog.Warningf("%s: filter was nil, all goroutines will receive all packets, possible scale reduction", flow.Name)
+			default:
+				if err := handle.SetBPFFilter(filter); err != nil {
+					klog.Errorf("%s: cannot set packet filter, err: %v", flow.Name, err)
+					return
+				}
+			}
 
 			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()

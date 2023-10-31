@@ -497,3 +497,55 @@ func TestHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestBPFFilter(t *testing.T) {
+	tests := []struct {
+		desc       string
+		inHeaders  []gopacket.SerializableLayer
+		wantFilter string
+		wantErr    bool
+	}{{
+		desc: "invalid number of layers",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		wantErr: true,
+	}, {
+		desc: "ipv4",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("192.0.2.1"),
+				DstIP:   net.ParseIP("192.0.2.2"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		wantFilter: "ip src host 192.0.2.1 and ip dst host 192.0.2.2",
+	}, {
+		desc: "ipv6",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.IPv6{
+				Version: 6,
+				SrcIP:   net.ParseIP("2001:db8::1"),
+				DstIP:   net.ParseIP("2001:db8::2"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		wantFilter: "ip6 src host 2001:db8::1 and ip6 dst host 2001:db8::2",
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := bpfFilter(tt.inHeaders)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("bpfFilter(%v): did not get expected err, got: %v, wantErr? %v", tt.inHeaders, err, tt.wantErr)
+			}
+			if got != tt.wantFilter {
+				t.Fatalf(`bpfFilter(%v): did not get expected filter, got: "%s", want: "%s"`, tt.inHeaders, got, tt.wantFilter)
+			}
+		})
+	}
+}
