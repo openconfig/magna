@@ -66,7 +66,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			<-rxReady
 
 			f := reporter.Flow(flow.GetName())
-			klog.Infof("%s send function started.", flow.Name)
+			klog.Infof("%s send function started.", flow.GetName())
 			f.clearStats(time.Now().UnixNano())
 
 			buf := gopacket.NewSerializeBuffer()
@@ -76,7 +76,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			}, hdrs...)
 			size := len(buf.Bytes())
 
-			klog.Infof("%s Tx interface %s", flow.Name, tx)
+			klog.Infof("%s Tx interface %s", flow.GetName(), tx)
 
 			ih, err := pcap.NewInactiveHandle(tx)
 			if err != nil {
@@ -100,7 +100,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			handle, err := ih.Activate()
 			if err != nil {
-				klog.Errorf("%s Tx error: %v", flow.Name, err)
+				klog.Errorf("%s Tx error: %v", flow.GetName(), err)
 				return
 			}
 			defer handle.Close()
@@ -116,7 +116,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, tx)
+					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.GetName(), tx)
 					f.setTransmit(false)
 					return
 				default:
@@ -125,25 +125,25 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 						// avoid busy looping.
 						time.Sleep(100 * time.Millisecond)
 					default:
-						klog.Infof("%s sending %d packets", flow.Name, pps)
+						klog.Infof("%s sending %d packets", flow.GetName(), pps)
 						sendStart := time.Now()
 						loopSentPackets := 0
 						for i := 1; i <= int(pps); i++ {
 							// packetsToSend == 0 means that we need to keep sending, as there is no limit specified
 							// by the user.
 							if packetsToSend != 0 && runSentPackets >= packetsToSend {
-								klog.Infof("%s: finished sending, sent %d packets", flow.Name, runSentPackets)
+								klog.Infof("%s: finished sending, sent %d packets", flow.GetName(), runSentPackets)
 								stopFlow = true
 								break
 							}
 							if err := handle.WritePacketData(buf.Bytes()); err != nil {
-								klog.Errorf("%s cannot write packet on interface %s, %v", flow.Name, tx, err)
+								klog.Errorf("%s cannot write packet on interface %s, %v", flow.GetName(), tx, err)
 								return
 							}
 							runSentPackets += 1
 							loopSentPackets += 1
 						}
-						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.Name, loopSentPackets, runSentPackets, time.Since(sendStart))
+						klog.Infof("%s: sent %d packets (total: %d) in %s", flow.GetName(), loopSentPackets, runSentPackets, time.Since(sendStart))
 
 						f.updateTx(int(loopSentPackets), size)
 						sleepDur := (1 * time.Second) - time.Since(sendStart)
@@ -154,7 +154,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 		}
 
 		recvFunc := func(controllerID string, stop, readyForTx chan struct{}) {
-			klog.Infof("%s receive function started on interface %s", flow.Name, rx)
+			klog.Infof("%s receive function started on interface %s", flow.GetName(), rx)
 			ih, err := pcap.NewInactiveHandle(rx)
 			if err != nil {
 				klog.Errorf("cannot create handle, err: %v", err)
@@ -177,7 +177,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			handle, err := ih.Activate()
 			if err != nil {
-				klog.Errorf("%s Rx error: %v", flow.Name, err)
+				klog.Errorf("%s Rx error: %v", flow.GetName(), err)
 				return
 			}
 			defer handle.Close()
@@ -193,11 +193,11 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			for {
 				select {
 				case <-stop:
-					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.Name, rx)
+					klog.Infof("controller ID %s, flow %s, exiting on %s", controllerID, flow.GetName(), rx)
 					return
 				case p := <-packetCh:
 					if err := rxPacket(f, p, match(hdrs, p)); err != nil {
-						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.Name, rx, err)
+						klog.Errorf("%s cannot receive packet on interface %s, %v", flow.GetName(), rx, err)
 					}
 				}
 			}
