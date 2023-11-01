@@ -52,9 +52,9 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			return nil, false, fmt.Errorf("cannot determine ports, %v", err)
 		}
 
-		fc.Name = &val{s: flow.Name, ts: flowTimeFn()}
+		fc.Name = &val{s: flow.GetName(), ts: flowTimeFn()}
 		klog.Infof("generating flow %s: tx: %s, rx: %s, rate: %d pps", flow.GetName(), tx, rx, pps)
-		reporter.AddFlow(flow.Name, fc)
+		reporter.AddFlow(flow.GetName(), fc)
 
 		// TODO(robjs): In the future we should wrap the PCAP handle in a library so that we can test our
 		// logic by writing into a test. Today, we're relying on integration test coverage here.
@@ -65,7 +65,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 			// for them to account the flow.
 			<-rxReady
 
-			f := reporter.Flow(flow.Name)
+			f := reporter.Flow(flow.GetName())
 			klog.Infof("%s send function started.", flow.Name)
 			f.clearStats(time.Now().UnixNano())
 
@@ -184,7 +184,7 @@ func Handler(fn hdrsFunc, match matchFunc, reporter *Reporter) lwotg.FlowGenerat
 
 			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()
-			f := reporter.Flow(flow.Name)
+			f := reporter.Flow(flow.GetName())
 
 			// Close the readyForTx channel so that the transmitter knows that we are ready to
 			// receive packets.

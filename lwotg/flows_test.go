@@ -12,6 +12,7 @@ import (
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestHandleFlows(t *testing.T) {
@@ -26,13 +27,13 @@ func TestHandleFlows(t *testing.T) {
 	}{{
 		desc: "unhandled flow",
 		inFlows: []*otg.Flow{{
-			Name: "unhandled",
+			Name: proto.String("unhandled"),
 		}},
 		wantErrCode: codes.Unimplemented,
 	}, {
 		desc: "handled flow",
 		inFlows: []*otg.Flow{{
-			Name: "handled",
+			Name: proto.String("handled"),
 		}},
 		inFns: []FlowGeneratorFn{
 			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
@@ -43,9 +44,9 @@ func TestHandleFlows(t *testing.T) {
 	}, {
 		desc: "two flows handled",
 		inFlows: []*otg.Flow{{
-			Name: "handled-1",
+			Name: proto.String("handled-1"),
 		}, {
-			Name: "handled-2",
+			Name: proto.String("handled-2"),
 		}},
 		inFns: []FlowGeneratorFn{
 			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
@@ -56,9 +57,9 @@ func TestHandleFlows(t *testing.T) {
 	}, {
 		desc: "duplicate flow names",
 		inFlows: []*otg.Flow{{
-			Name: "flow0",
+			Name: proto.String("flow0"),
 		}, {
-			Name: "flow0",
+			Name: proto.String("flow0"),
 		}},
 		inFns: []FlowGeneratorFn{
 			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
@@ -69,7 +70,7 @@ func TestHandleFlows(t *testing.T) {
 	}, {
 		desc: "flow handler that returns an error",
 		inFlows: []*otg.Flow{{
-			Name: "error",
+			Name: proto.String("error"),
 		}},
 		inFns: []FlowGeneratorFn{
 			func(_ *otg.Flow, _ []*OTGIntf) (TXRXFn, bool, error) {
