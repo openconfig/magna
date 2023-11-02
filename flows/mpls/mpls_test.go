@@ -2,6 +2,7 @@ package mpls
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -790,6 +791,110 @@ func TestPacketInFlow(t *testing.T) {
 			got := packetInFlow(tt.inHeaders, tt.inPacket)
 			if got != tt.want {
 				t.Fatalf("packetInFlow(hdrs, packet): didn't get expected result, got: %v, want: %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBPFFilter(t *testing.T) {
+	mac, err := net.ParseMAC("16:61:ee:09:bc:dc")
+	if err != nil {
+		t.Fatalf("cannot parse MAC, %v", err)
+	}
+
+	tests := []struct {
+		desc       string
+		inHeaders  []gopacket.SerializableLayer
+		wantFilter string
+		wantErr    bool
+	}{{
+		desc: "too few headers",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC: mac,
+				DstMAC: mac,
+			},
+		},
+		wantErr: true,
+	}, {
+		desc: "IP header only",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("2.3.4.5"),
+			},
+			gopacket.Payload([]byte{0x00, 0x00, 0x00, 0x00}),
+		},
+		wantFilter: `(mpls and
+		((ether[30:4] == 0x01020304 and ether[34:4] == 0x02030405) or
+		(ether[34:4] == 0x01020304 and ether[38:4] == 0x02030405) or
+		(ether[38:4] == 0x01020304 and ether[42:4] == 0x02030405) or
+		(ether[42:4] == 0x01020304 and ether[46:4] == 0x02030405) or
+		(ether[46:4] == 0x01020304 and ether[50:4] == 0x02030405) or
+		(ether[50:4] == 0x01020304 and ether[54:4] == 0x02030405) or
+		(ether[54:4] == 0x01020304 and ether[58:4] == 0x02030405) or
+		(ether[58:4] == 0x01020304 and ether[62:4] == 0x02030405) or
+		(ether[62:4] == 0x01020304 and ether[66:4] == 0x02030405) or
+		(ether[66:4] == 0x01020304 and ether[70:4] == 0x02030405) or
+		(ether[70:4] == 0x01020304 and ether[74:4] == 0x02030405) or
+		(ether[74:4] == 0x01020304 and ether[78:4] == 0x02030405) or
+		(ether[78:4] == 0x01020304 and ether[82:4] == 0x02030405) or
+		(ether[82:4] == 0x01020304 and ether[86:4] == 0x02030405) or
+		(ether[86:4] == 0x01020304 and ether[90:4] == 0x02030405) or
+		(ether[90:4] == 0x01020304 and ether[94:4] == 0x02030405) or
+		(ether[94:4] == 0x01020304 and ether[98:4] == 0x02030405) or
+		(ether[98:4] == 0x01020304 and ether[102:4] == 0x02030405) or
+		(ether[102:4] == 0x01020304 and ether[106:4] == 0x02030405) or
+		(ether[106:4] == 0x01020304 and ether[110:4] == 0x02030405))) or
+		(ip and src host 1.2.3.4 and dst host 2.3.4.5)`,
+	}, {
+		desc: "MPLS headers in spec",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("192.0.2.1"),
+				DstIP:   net.ParseIP("192.0.2.2"),
+			},
+			gopacket.Payload([]byte{0x00, 0x00, 0x00, 0x00}),
+		},
+		wantFilter: `(mpls and
+		((ether[30:4] == 0xc0000201 and ether[34:4] == 0xc0000202) or
+		(ether[34:4] == 0xc0000201 and ether[38:4] == 0xc0000202) or
+		(ether[38:4] == 0xc0000201 and ether[42:4] == 0xc0000202) or
+		(ether[42:4] == 0xc0000201 and ether[46:4] == 0xc0000202) or
+		(ether[46:4] == 0xc0000201 and ether[50:4] == 0xc0000202) or
+		(ether[50:4] == 0xc0000201 and ether[54:4] == 0xc0000202) or
+		(ether[54:4] == 0xc0000201 and ether[58:4] == 0xc0000202) or
+		(ether[58:4] == 0xc0000201 and ether[62:4] == 0xc0000202) or
+		(ether[62:4] == 0xc0000201 and ether[66:4] == 0xc0000202) or
+		(ether[66:4] == 0xc0000201 and ether[70:4] == 0xc0000202) or
+		(ether[70:4] == 0xc0000201 and ether[74:4] == 0xc0000202) or
+		(ether[74:4] == 0xc0000201 and ether[78:4] == 0xc0000202) or
+		(ether[78:4] == 0xc0000201 and ether[82:4] == 0xc0000202) or
+		(ether[82:4] == 0xc0000201 and ether[86:4] == 0xc0000202) or
+		(ether[86:4] == 0xc0000201 and ether[90:4] == 0xc0000202) or
+		(ether[90:4] == 0xc0000201 and ether[94:4] == 0xc0000202) or
+		(ether[94:4] == 0xc0000201 and ether[98:4] == 0xc0000202) or
+		(ether[98:4] == 0xc0000201 and ether[102:4] == 0xc0000202) or
+		(ether[102:4] == 0xc0000201 and ether[106:4] == 0xc0000202) or
+		(ether[106:4] == 0xc0000201 and ether[110:4] == 0xc0000202))) or
+		(ip and src host 192.0.2.1 and dst host 192.0.2.2)`,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := bpfFilter(tt.inHeaders)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("bpfFilter(%v): did not get expected error, got: %v, wantErr? %v", tt.inHeaders, err, tt.wantErr)
+			}
+			if diff := cmp.Diff(got, strings.ReplaceAll(strings.ReplaceAll(tt.wantFilter, "\n", " "), "\t", "")); diff != "" {
+				t.Fatalf("bpfFilter(%v): did not get expected filter, diff(-got,+want):\n%s", tt.inHeaders, diff)
 			}
 		})
 	}

@@ -249,7 +249,9 @@ func TestBasicMPLS(t *testing.T) {
 
 	otg := ondatra.ATE(t, "ate").OTG()
 	otgCfg.Flows().Clear().Items()
-	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, 5)
+	packets := uint32((*sleepTime).Seconds() * 0.9)
+	t.Logf("sending %d packets in %s", packets, *sleepTime)
+	addMPLSFlow(t, otgCfg, "MPLS_FLOW", ateSrc.Name, ateDst.Name, "100.64.1.1", "100.64.1.2", 1, packets)
 
 	otg.PushConfig(t, otgCfg)
 
