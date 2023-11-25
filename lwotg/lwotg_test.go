@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
@@ -26,6 +27,16 @@ func TestSetControlState(t *testing.T) {
 	trafficStop := otg.StateTrafficFlowTransmit_State_stop
 	trafficPause := otg.StateTrafficFlowTransmit_State_pause
 	trafficResume := otg.StateTrafficFlowTransmit_State_resume
+
+	choicePort := otg.ControlState_Choice_port
+	choiceProtocol := otg.ControlState_Choice_protocol
+	choiceRoute := otg.StateProtocol_Choice_route
+	choiceAllProto := otg.StateProtocol_Choice_all
+	choiceTraffic := otg.ControlState_Choice_traffic
+	choiceFlowTransmit := otg.StateTraffic_Choice_flow_transmit
+	choiceTrafficUnknown := otg.StateTraffic_Choice_unspecified
+
+	startProto := otg.StateProtocolAll_State_start
 
 	tests := []struct {
 		desc              string
@@ -39,7 +50,7 @@ func TestSetControlState(t *testing.T) {
 		desc: "port state - unimplemented",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_port,
+				Choice: &choicePort,
 			},
 		},
 		wantErrCode: codes.Unimplemented,
@@ -47,9 +58,9 @@ func TestSetControlState(t *testing.T) {
 		desc: "protocol state for individual protocol",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_protocol,
+				Choice: &choiceProtocol,
 				Protocol: &otg.StateProtocol{
-					Choice: otg.StateProtocol_Choice_route,
+					Choice: &choiceRoute,
 				},
 			},
 		},
@@ -58,11 +69,11 @@ func TestSetControlState(t *testing.T) {
 		desc: "protocol state for all - with nil protocol handler",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_protocol,
+				Choice: &choiceProtocol,
 				Protocol: &otg.StateProtocol{
-					Choice: otg.StateProtocol_Choice_all,
+					Choice: &choiceAllProto,
 					All: &otg.StateProtocolAll{
-						State: otg.StateProtocolAll_State_start,
+						State: &startProto,
 					},
 				},
 			},
@@ -72,11 +83,11 @@ func TestSetControlState(t *testing.T) {
 		desc: "protocol state for all - with specified protocol handler",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_protocol,
+				Choice: &choiceProtocol,
 				Protocol: &otg.StateProtocol{
-					Choice: otg.StateProtocol_Choice_all,
+					Choice: &choiceAllProto,
 					All: &otg.StateProtocolAll{
-						State: otg.StateProtocolAll_State_start,
+						State: &startProto,
 					},
 				},
 			},
@@ -107,9 +118,9 @@ func TestSetControlState(t *testing.T) {
 		}},
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_traffic,
+				Choice: &choiceTraffic,
 				Traffic: &otg.StateTraffic{
-					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					Choice: &choiceFlowTransmit, // unspecified is alt operation
 					FlowTransmit: &otg.StateTrafficFlowTransmit{
 						State: &trafficStart,
 					},
@@ -128,9 +139,9 @@ func TestSetControlState(t *testing.T) {
 		desc: "traffic state with unspecified operation",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_traffic,
+				Choice: &choiceTraffic,
 				Traffic: &otg.StateTraffic{
-					Choice: otg.StateTraffic_Choice_unspecified,
+					Choice: &choiceTrafficUnknown,
 				},
 			},
 		},
@@ -139,9 +150,9 @@ func TestSetControlState(t *testing.T) {
 		desc: "traffic state with stop operation",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_traffic,
+				Choice: &choiceTraffic,
 				Traffic: &otg.StateTraffic{
-					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					Choice: &choiceFlowTransmit, // unspecified is alt operation
 					FlowTransmit: &otg.StateTrafficFlowTransmit{
 						State: &trafficStop,
 					},
@@ -153,9 +164,9 @@ func TestSetControlState(t *testing.T) {
 		desc: "traffic state with pause operation",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_traffic,
+				Choice: &choiceTraffic,
 				Traffic: &otg.StateTraffic{
-					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					Choice: &choiceFlowTransmit, // unspecified is alt operation
 					FlowTransmit: &otg.StateTrafficFlowTransmit{
 						State: &trafficPause,
 					},
@@ -167,9 +178,9 @@ func TestSetControlState(t *testing.T) {
 		desc: "traffic state with resume operation",
 		inRequest: &otg.SetControlStateRequest{
 			ControlState: &otg.ControlState{
-				Choice: otg.ControlState_Choice_traffic,
+				Choice: &choiceTraffic,
 				Traffic: &otg.StateTraffic{
-					Choice: otg.StateTraffic_Choice_flow_transmit, // unspecified is alt operation
+					Choice: &choiceFlowTransmit, // unspecified is alt operation
 					FlowTransmit: &otg.StateTrafficFlowTransmit{
 						State: &trafficResume,
 					},
@@ -267,7 +278,7 @@ func TestSetConfig(t *testing.T) {
 		inRequest: &otg.SetConfigRequest{
 			Config: &otg.Config{
 				Flows: []*otg.Flow{{
-					Name: "flow1",
+					Name: proto.String("flow1"),
 				}},
 			},
 		},
@@ -282,7 +293,7 @@ func TestSetConfig(t *testing.T) {
 		inRequest: &otg.SetConfigRequest{
 			Config: &otg.Config{
 				Flows: []*otg.Flow{{
-					Name: "flow1",
+					Name: proto.String("flow1"),
 				}},
 			},
 		},

@@ -20,13 +20,13 @@ func TestPortsToSystem(t *testing.T) {
 	}{{
 		desc: "interface with no location",
 		inPorts: []*otg.Port{{
-			Name: "port1",
+			Name: proto.String("port1"),
 		}},
 		wantErr: true,
 	}, {
 		desc: "ethernet port with no name",
 		inPorts: []*otg.Port{{
-			Name:     "port0",
+			Name:     proto.String("port0"),
 			Location: proto.String("eth0"),
 		}},
 		inDevices: []*otg.Device{{
@@ -36,12 +36,12 @@ func TestPortsToSystem(t *testing.T) {
 	}, {
 		desc: "ethernet port with invalid location",
 		inPorts: []*otg.Port{{
-			Name:     "port0",
+			Name:     proto.String("port0"),
 			Location: proto.String("eth0"),
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name: "port0ETH",
+				Name: proto.String("port0ETH"),
 				Connection: &otg.EthernetConnection{
 					PortName: proto.String("port42"),
 				},
@@ -51,12 +51,12 @@ func TestPortsToSystem(t *testing.T) {
 	}, {
 		desc: "ethernet port with no addresses",
 		inPorts: []*otg.Port{{
-			Name:     "port0",
+			Name:     proto.String("port0"),
 			Location: proto.String("eth0"),
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name: "port0ETH",
+				Name: proto.String("port0ETH"),
 				Connection: &otg.EthernetConnection{
 					PortName: proto.String("port0"),
 				},
@@ -70,19 +70,19 @@ func TestPortsToSystem(t *testing.T) {
 	}, {
 		desc: "ethernet port with IPv4 addresses",
 		inPorts: []*otg.Port{{
-			Name:     "port0",
+			Name:     proto.String("port0"),
 			Location: proto.String("eth0"),
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name: "port0ETH",
+				Name: proto.String("port0ETH"),
 				Connection: &otg.EthernetConnection{
 					PortName: proto.String("port0"),
 				},
 				Ipv4Addresses: []*otg.DeviceIpv4{{
-					Address: "192.0.2.1",
+					Address: proto.String("192.0.2.1"),
 					Prefix:  proto.Uint32(24),
-					Gateway: "192.0.2.254",
+					Gateway: proto.String("192.0.2.254"),
 				}},
 			}},
 		}},
@@ -99,36 +99,36 @@ func TestPortsToSystem(t *testing.T) {
 	}, {
 		desc: "multiple addresses and interfaces",
 		inPorts: []*otg.Port{{
-			Name:     "port0",
+			Name:     proto.String("port0"),
 			Location: proto.String("eth0"),
 		}, {
-			Name:     "port1",
+			Name:     proto.String("port1"),
 			Location: proto.String("eth1"),
 		}},
 		inDevices: []*otg.Device{{
 			Ethernets: []*otg.DeviceEthernet{{
-				Name: "port0ETH",
+				Name: proto.String("port0ETH"),
 				Connection: &otg.EthernetConnection{
 					PortName: proto.String("port0"),
 				},
 				Ipv4Addresses: []*otg.DeviceIpv4{{
-					Address: "192.0.2.1",
+					Address: proto.String("192.0.2.1"),
 					Prefix:  proto.Uint32(24),
-					Gateway: "192.0.2.254",
+					Gateway: proto.String("192.0.2.254"),
 				}, {
-					Address: "10.0.0.1",
+					Address: proto.String("10.0.0.1"),
 					Prefix:  proto.Uint32(24),
-					Gateway: "10.0.0.254",
+					Gateway: proto.String("10.0.0.254"),
 				}},
 			}, {
-				Name: "port1ETH",
+				Name: proto.String("port1ETH"),
 				Connection: &otg.EthernetConnection{
 					PortName: proto.String("port1"),
 				},
 				Ipv4Addresses: []*otg.DeviceIpv4{{
-					Address: "10.0.1.1",
+					Address: proto.String("10.0.1.1"),
 					Prefix:  proto.Uint32(24),
-					Gateway: "10.0.1.254",
+					Gateway: proto.String("10.0.1.254"),
 				}},
 			}},
 		}},

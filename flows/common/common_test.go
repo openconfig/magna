@@ -38,7 +38,7 @@ func TestPorts(t *testing.T) {
 			TxRx: &otg.FlowTxRx{
 				Choice: &portValue,
 				Port: &otg.FlowPort{
-					TxName:  "port1",
+					TxName:  proto.String("port1"),
 					RxNames: []string{"port2"},
 				},
 			},
@@ -50,7 +50,7 @@ func TestPorts(t *testing.T) {
 			TxRx: &otg.FlowTxRx{
 				Choice: &portValue,
 				Port: &otg.FlowPort{
-					TxName:  "port1",
+					TxName:  proto.String("port1"),
 					RxNames: []string{"port2"},
 				},
 			},
@@ -70,7 +70,7 @@ func TestPorts(t *testing.T) {
 			TxRx: &otg.FlowTxRx{
 				Choice: &portValue,
 				Port: &otg.FlowPort{
-					TxName: "port1",
+					TxName: proto.String("port1"),
 					RxName: proto.String("port2"), // Note, this field is to be deprecated.
 				},
 			},
@@ -90,7 +90,7 @@ func TestPorts(t *testing.T) {
 			TxRx: &otg.FlowTxRx{
 				Choice: &portValue,
 				Port: &otg.FlowPort{
-					TxName:  "port1",
+					TxName:  proto.String("port1"),
 					RxNames: []string{"port1", "port2"},
 				},
 			},

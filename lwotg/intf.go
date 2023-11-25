@@ -45,9 +45,9 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*OTGIntf, error)
 	physIntf := map[string]string{}
 	for _, p := range ports {
 		if p.Location == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid interface %s, does not specify a port location", p.Name)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid interface %s, does not specify a port location", p.GetName())
 		}
-		physIntf[p.Name] = *p.Location
+		physIntf[p.GetName()] = *p.Location
 	}
 
 	intfs := []*OTGIntf{}
@@ -63,7 +63,7 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*OTGIntf, error)
 			}
 
 			i := &OTGIntf{
-				OTGEthernetName: e.Name,
+				OTGEthernetName: e.GetName(),
 				OTGPortName:     pn,
 				SystemName:      sysInt,
 				IPv4:            []*ipAddress{},
@@ -71,13 +71,13 @@ func portsToSystem(ports []*otg.Port, devices []*otg.Device) ([]*OTGIntf, error)
 
 			for _, a := range e.Ipv4Addresses {
 				if a.GetPrefix() == 0 {
-					return nil, status.Errorf(codes.InvalidArgument, "unsupported zero prefix length for address %s (in %s)", a.Address, e)
+					return nil, status.Errorf(codes.InvalidArgument, "unsupported zero prefix length for address %s (in %s)", a.GetAddress(), e)
 				}
 
 				i.IPv4 = append(i.IPv4, &ipAddress{
-					Address: net.ParseIP(a.Address),
+					Address: net.ParseIP(a.GetAddress()),
 					Mask:    int(a.GetPrefix()),
-					Gateway: net.ParseIP(a.Gateway),
+					Gateway: net.ParseIP(a.GetGateway()),
 				})
 			}
 
