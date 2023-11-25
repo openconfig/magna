@@ -190,3 +190,28 @@ func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct{}
 
 	return nil
 }
+
+// InterfaceState changes the state of an interface on the underlying system.
+// The interface is looked up by the name specified, and is set to the state
+// specified by state. It returns an error if the interface cannot be found or
+// the system cannot complete the specified operation.
+func (n netlinkAccessor) InterfaceState(name string, state IntState) error {
+	l, err := netlink.LinkByName(name)
+	if err != nil {
+		return fmt.Errorf("cannot get link, %w", err)
+	}
+
+	switch state {
+	case InterfaceDown:
+		if err := netlink.LinkSetDown(l); err != nil {
+			return fmt.Errorf("cannot shut down link, %w", err)
+		}
+	case InterfaceUp:
+		if err := netlink.LinkSetUp(l); err != nil {
+			return fmt.Errorf("cannot enable link, %w", err)
+		}
+	default:
+		return fmt.Errorf("unknown operation: %d", state)
+	}
+	return nil
+}
