@@ -193,12 +193,12 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 			filter, err := bpfFn(hdrs)
 			switch {
 			case err != nil:
-				klog.Errorf("%s: cannot generate BPF filter, running unfiltered: %v", flow.Name, err)
+				klog.Errorf("%s: cannot generate BPF filter, running unfiltered: %v", flow.GetName(), err)
 			case filter == "":
-				klog.Warningf("%s: filter was nil, all goroutines will receive all packets, possible scale reduction", flow.Name)
+				klog.Warningf("%s: filter was nil, all goroutines will receive all packets, possible scale reduction", flow.GetName())
 			default:
 				if err := handle.SetBPFFilter(filter); err != nil {
-					klog.Errorf("%s: cannot set packet filter, err: %v", flow.Name, err)
+					klog.Errorf("%s: cannot set packet filter, err: %v", flow.GetName(), err)
 					return
 				}
 			}
