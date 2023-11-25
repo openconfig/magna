@@ -36,6 +36,8 @@ type Interface struct {
 	MAC net.HardwareAddr
 	// OperState is the operational status of the interface.
 	OperState IntState
+	// AdminState is the administrative state of the interface.
+	AdminState IntState
 }
 
 // String is the string representation of an interface that can be read by humans.

@@ -88,7 +88,7 @@ func TestInterfaces(t *testing.T) {
 }
 
 func TestInterfaceState(t *testing.T) {
-	name := "magna-dummy"
+	name := "dummy0"
 	dummy := &netlink.Dummy{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: name,
@@ -99,27 +99,28 @@ func TestInterfaceState(t *testing.T) {
 		t.Fatalf("cannot add dummy link, %v", err)
 	}
 
+	dummyState := func() intf.IntState {
+		l, err := intf.InterfaceByName(name)
+		if err != nil {
+			t.Errorf("unable to get dummy link, %v", err)
+		}
+		return l.AdminState
+	}
+
 	if err := intf.InterfaceState(name, intf.InterfaceDown); err != nil {
 		t.Errorf("cannot shut down dummy link, %v", err)
 	}
 
-	l, err := intf.InterfaceByName(name)
-	if err != nil {
-		t.Errorf("unable to get dummy link, %v", err)
-	}
-	if got, want := l.OperState, intf.InterfaceDown; got != want {
+	if got, want := dummyState(), intf.InterfaceDown; got != want {
 		t.Errorf("interface was not operationally down, got: %v, want: %v", got, want)
 	}
 
 	if err := intf.InterfaceState(name, intf.InterfaceUp); err != nil {
 		t.Errorf("cannot enable dummy link, %v", err)
 	}
-	l, err = intf.InterfaceByName(name)
-	if err != nil {
-		t.Errorf("unable to get dummy link, %v", err)
-	}
-	if got, want := l.OperState, intf.InterfaceUp; got != want {
-		t.Errorf("interface was not operationally up, got: %v, want: %v", got, want)
+
+	if got, want := dummyState(), intf.InterfaceUp; got != want {
+		t.Errorf("interface was not restored to its previous state, got: %v, want: %v", got, want)
 	}
 
 	if err := netlink.LinkDel(dummy); err != nil {

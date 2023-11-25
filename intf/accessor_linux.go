@@ -44,21 +44,29 @@ func init() {
 // system.
 type netlinkAccessor struct{}
 
-// intState maps a netlink operational link state to an intf internal
+// intOperState maps a netlink operational link state to an intf internal
 // representation.
-func intState(n netlink.LinkOperState) IntState {
+func intOperState(n netlink.LinkOperState) IntState {
 	operStateMap := map[netlink.LinkOperState]IntState{
 		netlink.OperUp:   InterfaceUp,
 		netlink.OperDown: InterfaceDown,
 	}
-
-	fmt.Printf("mapping %d to interface state", n)
 
 	if _, ok := operStateMap[n]; !ok {
 		return InterfaceStateUnknown
 	}
 
 	return operStateMap[n]
+}
+
+// intAdminState maps an interface's flags to the administrative state of
+// the interface. The flags are defined in the net package
+// (see https://cs.opensource.google/go/go/+/refs/tags/go1.21.4:src/net/interface.go;l=39).
+func intAdminState(n net.Flags) IntState {
+	if n&1 != 0 {
+		return InterfaceUp
+	}
+	return InterfaceDown
 }
 
 // Interface retrieves the interface named from the underlying system
@@ -71,10 +79,11 @@ func (n netlinkAccessor) Interface(name string) (*Interface, error) {
 
 	attrs := link.Attrs()
 	return &Interface{
-		Index:     attrs.Index,
-		Name:      attrs.Name,
-		MAC:       attrs.HardwareAddr,
-		OperState: intState(attrs.OperState),
+		Index:      attrs.Index,
+		Name:       attrs.Name,
+		MAC:        attrs.HardwareAddr,
+		AdminState: intAdminState(attrs.Flags),
+		OperState:  intOperState(attrs.OperState),
 	}, nil
 }
 
@@ -90,10 +99,11 @@ func (n netlinkAccessor) Interfaces() ([]*Interface, error) {
 	for _, i := range ints {
 		attrs := i.Attrs()
 		intfs = append(intfs, &Interface{
-			Index:     attrs.Index,
-			Name:      attrs.Name,
-			MAC:       attrs.HardwareAddr,
-			OperState: intState(attrs.OperState),
+			Index:      attrs.Index,
+			Name:       attrs.Name,
+			MAC:        attrs.HardwareAddr,
+			AdminState: intAdminState(attrs.Flags),
+			OperState:  intOperState(attrs.OperState),
 		})
 	}
 	return intfs, nil
@@ -106,10 +116,11 @@ func interfaceByIndex(idx int) (*Interface, error) {
 		return nil, fmt.Errorf("cannot find link by index %d", idx)
 	}
 	return &Interface{
-		Index:     idx,
-		Name:      link.Attrs().Name,
-		MAC:       link.Attrs().HardwareAddr,
-		OperState: intState(link.Attrs().OperState),
+		Index:      idx,
+		Name:       link.Attrs().Name,
+		MAC:        link.Attrs().HardwareAddr,
+		AdminState: intAdminState(link.Attrs().Flags),
+		OperState:  intOperState(link.Attrs().OperState),
 	}, nil
 }
 
