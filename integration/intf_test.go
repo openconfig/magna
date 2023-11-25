@@ -86,3 +86,28 @@ func TestInterfaces(t *testing.T) {
 
 	t.Logf("Got interfaces: %v", ints)
 }
+
+func TestInterfaceState(t *testing.T) {
+	name := "magna-dummy"
+	dummy := &netlink.Dummy{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: name,
+		},
+	}
+
+	if err := netlink.LinkAdd(dummy); err != nil {
+		t.Fatalf("cannot add dummy link, %v", err)
+	}
+
+	if err := intf.InterfaceState(name, intf.InterfaceDown); err != nil {
+		t.Errorf("cannot shut down dummy link, %v", err)
+	}
+
+	if err := intf.InterfaceState(name, intf.InterfaceUp); err != nil {
+		t.Errorf("cannot enable dummy link, %v", err)
+	}
+
+	if err := netlink.LinkDel(dummy); err != nil {
+		t.Fatalf("cannot delete dummy link, %v", err)
+	}
+}
