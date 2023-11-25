@@ -107,7 +107,7 @@ func interfaceByIndex(idx int) (*Interface, error) {
 		Index:     idx,
 		Name:      link.Attrs().Name,
 		MAC:       link.Attrs().HardwareAddr,
-		OperState: intState(attrs.OperState),
+		OperState: intState(link.Attrs().OperState),
 	}, nil
 }
 
