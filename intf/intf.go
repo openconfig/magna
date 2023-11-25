@@ -34,6 +34,8 @@ type Interface struct {
 	Name string
 	// MAC is the MAC address of the interface.
 	MAC net.HardwareAddr
+	// OperState is the operational status of the interface.
+	OperState IntState
 }
 
 // String is the string representation of an interface that can be read by humans.
@@ -244,7 +246,7 @@ func Interfaces() ([]*Interface, error) {
 type IntState int64
 
 const (
-	_ IntState = iota
+	InterfaceStateUnknown IntState = iota
 	// InterfaceUp sets a link to administratively and operationally
 	// up.
 	InterfaceUp

@@ -44,6 +44,21 @@ func init() {
 // system.
 type netlinkAccessor struct{}
 
+// intState maps a netlink operational link state to an intf internal
+// representation.
+func intState(n netlink.LinkOperState) IntState {
+	operStateMap := map[netlink.LinkOperState]IntState{
+		netlink.OperUp:   InterfaceUp,
+		netlink.OperDown: InterfaceDown,
+	}
+
+	if _, ok := operStateMap[n]; !ok {
+		return InterfaceStateUnknown
+	}
+
+	return operStateMap[n]
+}
+
 // Interface retrieves the interface named from the underlying system
 // through making a netlink call.
 func (n netlinkAccessor) Interface(name string) (*Interface, error) {
@@ -54,9 +69,10 @@ func (n netlinkAccessor) Interface(name string) (*Interface, error) {
 
 	attrs := link.Attrs()
 	return &Interface{
-		Index: attrs.Index,
-		Name:  attrs.Name,
-		MAC:   attrs.HardwareAddr,
+		Index:     attrs.Index,
+		Name:      attrs.Name,
+		MAC:       attrs.HardwareAddr,
+		OperState: intState(attrs.OperState),
 	}, nil
 }
 
@@ -72,9 +88,10 @@ func (n netlinkAccessor) Interfaces() ([]*Interface, error) {
 	for _, i := range ints {
 		attrs := i.Attrs()
 		intfs = append(intfs, &Interface{
-			Index: attrs.Index,
-			Name:  attrs.Name,
-			MAC:   attrs.HardwareAddr,
+			Index:     attrs.Index,
+			Name:      attrs.Name,
+			MAC:       attrs.HardwareAddr,
+			OperState: intState(attrs.OperState),
 		})
 	}
 	return intfs, nil
@@ -87,9 +104,10 @@ func interfaceByIndex(idx int) (*Interface, error) {
 		return nil, fmt.Errorf("cannot find link by index %d", idx)
 	}
 	return &Interface{
-		Index: idx,
-		Name:  link.Attrs().Name,
-		MAC:   link.Attrs().HardwareAddr,
+		Index:     idx,
+		Name:      link.Attrs().Name,
+		MAC:       link.Attrs().HardwareAddr,
+		OperState: intState(attrs.OperState),
 	}, nil
 }
 

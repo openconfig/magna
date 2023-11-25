@@ -103,8 +103,23 @@ func TestInterfaceState(t *testing.T) {
 		t.Errorf("cannot shut down dummy link, %v", err)
 	}
 
+	l, err := intf.InterfaceByName(name)
+	if err != nil {
+		t.Errorf("unable to get dummy link, %v", err)
+	}
+	if got, want := l.OperState, intf.InterfaceDown; got != want {
+		t.Errorf("interface was not operationally down, got: %v, want: %v", got, want)
+	}
+
 	if err := intf.InterfaceState(name, intf.InterfaceUp); err != nil {
 		t.Errorf("cannot enable dummy link, %v", err)
+	}
+	l, err = intf.InterfaceByName(name)
+	if err != nil {
+		t.Errorf("unable to get dummy link, %v", err)
+	}
+	if got, want := l.OperState, intf.InterfaceUp; got != want {
+		t.Errorf("interface was not operationally up, got: %v, want: %v", got, want)
 	}
 
 	if err := netlink.LinkDel(dummy); err != nil {
