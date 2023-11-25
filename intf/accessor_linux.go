@@ -52,6 +52,8 @@ func intState(n netlink.LinkOperState) IntState {
 		netlink.OperDown: InterfaceDown,
 	}
 
+	fmt.Printf("mapping %d to interface state", n)
+
 	if _, ok := operStateMap[n]; !ok {
 		return InterfaceStateUnknown
 	}
