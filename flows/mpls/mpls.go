@@ -17,7 +17,7 @@ import (
 	"github.com/openconfig/magna/flows/common"
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

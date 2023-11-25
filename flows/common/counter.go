@@ -13,7 +13,7 @@ import (
 	"github.com/openconfig/magna/otgyang"
 	tcommon "github.com/openconfig/magna/telemetry/common"
 	"github.com/openconfig/ygot/ygot"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 var (

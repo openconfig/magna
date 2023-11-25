@@ -8,7 +8,7 @@ import (
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 type TXRXWrapper struct {

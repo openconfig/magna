@@ -9,7 +9,7 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/lwotg"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 var (

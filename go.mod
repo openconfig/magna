@@ -17,7 +17,6 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
 	google.golang.org/grpc v1.58.0-dev
 	google.golang.org/protobuf v1.31.0
-	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.90.1
 )
 

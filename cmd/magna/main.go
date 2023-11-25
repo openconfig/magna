@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )

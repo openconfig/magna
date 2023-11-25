@@ -13,7 +13,7 @@ import (
 	"github.com/openconfig/magna/intf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // Hint is <group, key, value> tuple that can be handed to modules of the

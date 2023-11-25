@@ -8,7 +8,7 @@ import (
 
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem/gnmit"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // HintMap is a structured set of hints that are supplied by the server, it
