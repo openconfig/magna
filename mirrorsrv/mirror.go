@@ -9,10 +9,12 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	mpb "github.com/openconfig/magna/proto/mirror"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
+
+	mpb "github.com/openconfig/magna/proto/mirror"
 )
 
 type Server struct {

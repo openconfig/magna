@@ -19,7 +19,7 @@ import (
 	"net"
 
 	"github.com/vishvananda/netlink"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -44,6 +44,31 @@ func init() {
 // system.
 type netlinkAccessor struct{}
 
+// intOperState maps a netlink operational link state to an intf internal
+// representation.
+func intOperState(n netlink.LinkOperState) IntState {
+	operStateMap := map[netlink.LinkOperState]IntState{
+		netlink.OperUp:   InterfaceUp,
+		netlink.OperDown: InterfaceDown,
+	}
+
+	if _, ok := operStateMap[n]; !ok {
+		return InterfaceStateUnknown
+	}
+
+	return operStateMap[n]
+}
+
+// intAdminState maps an interface's flags to the administrative state of
+// the interface. The flags are defined in the net package
+// (see https://cs.opensource.google/go/go/+/refs/tags/go1.21.4:src/net/interface.go;l=39).
+func intAdminState(n net.Flags) IntState {
+	if n&1 != 0 {
+		return InterfaceUp
+	}
+	return InterfaceDown
+}
+
 // Interface retrieves the interface named from the underlying system
 // through making a netlink call.
 func (n netlinkAccessor) Interface(name string) (*Interface, error) {
@@ -54,9 +79,11 @@ func (n netlinkAccessor) Interface(name string) (*Interface, error) {
 
 	attrs := link.Attrs()
 	return &Interface{
-		Index: attrs.Index,
-		Name:  attrs.Name,
-		MAC:   attrs.HardwareAddr,
+		Index:      attrs.Index,
+		Name:       attrs.Name,
+		MAC:        attrs.HardwareAddr,
+		AdminState: intAdminState(attrs.Flags),
+		OperState:  intOperState(attrs.OperState),
 	}, nil
 }
 
@@ -72,9 +99,11 @@ func (n netlinkAccessor) Interfaces() ([]*Interface, error) {
 	for _, i := range ints {
 		attrs := i.Attrs()
 		intfs = append(intfs, &Interface{
-			Index: attrs.Index,
-			Name:  attrs.Name,
-			MAC:   attrs.HardwareAddr,
+			Index:      attrs.Index,
+			Name:       attrs.Name,
+			MAC:        attrs.HardwareAddr,
+			AdminState: intAdminState(attrs.Flags),
+			OperState:  intOperState(attrs.OperState),
 		})
 	}
 	return intfs, nil
@@ -87,9 +116,11 @@ func interfaceByIndex(idx int) (*Interface, error) {
 		return nil, fmt.Errorf("cannot find link by index %d", idx)
 	}
 	return &Interface{
-		Index: idx,
-		Name:  link.Attrs().Name,
-		MAC:   link.Attrs().HardwareAddr,
+		Index:      idx,
+		Name:       link.Attrs().Name,
+		MAC:        link.Attrs().HardwareAddr,
+		AdminState: intAdminState(link.Attrs().Flags),
+		OperState:  intOperState(link.Attrs().OperState),
 	}, nil
 }
 
@@ -188,5 +219,30 @@ func (n netlinkAccessor) ARPSubscribe(updates chan ARPUpdate, done chan struct{}
 		return fmt.Errorf("cannot subscribe to neighbours, err: %v", err)
 	}
 
+	return nil
+}
+
+// InterfaceState changes the state of an interface on the underlying system.
+// The interface is looked up by the name specified, and is set to the state
+// specified by state. It returns an error if the interface cannot be found or
+// the system cannot complete the specified operation.
+func (n netlinkAccessor) InterfaceState(name string, state IntState) error {
+	l, err := netlink.LinkByName(name)
+	if err != nil {
+		return fmt.Errorf("cannot get link, %w", err)
+	}
+
+	switch state {
+	case InterfaceDown:
+		if err := netlink.LinkSetDown(l); err != nil {
+			return fmt.Errorf("cannot shut down link, %w", err)
+		}
+	case InterfaceUp:
+		if err := netlink.LinkSetUp(l); err != nil {
+			return fmt.Errorf("cannot enable link, %w", err)
+		}
+	default:
+		return fmt.Errorf("unknown operation: %d", state)
+	}
 	return nil
 }

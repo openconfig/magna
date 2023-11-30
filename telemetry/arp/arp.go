@@ -11,7 +11,7 @@ import (
 	"github.com/openconfig/magna/otgyang"
 	"github.com/openconfig/magna/telemetry/common"
 	"github.com/openconfig/ygot/ygot"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )

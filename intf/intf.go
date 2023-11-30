@@ -34,6 +34,10 @@ type Interface struct {
 	Name string
 	// MAC is the MAC address of the interface.
 	MAC net.HardwareAddr
+	// OperState is the operational status of the interface.
+	OperState IntState
+	// AdminState is the administrative state of the interface.
+	AdminState IntState
 }
 
 // String is the string representation of an interface that can be read by humans.
@@ -92,6 +96,8 @@ type NetworkAccessor interface {
 	// that writes updates to the updates channel, and can be cancelled by sending a
 	// message to the done channel.
 	ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error
+	// InterfaceState manipulates the state of the interface specified by name.
+	InterfaceState(name string, state IntState) error
 }
 
 // unimplementedAccessor is an accessor interface that returns unimplemented
@@ -126,6 +132,12 @@ func (u unimplementedAccessor) ARPList() ([]*ARPEntry, error) {
 // ARPSubscribe returns unimplemented when asked to subscribe to ARP changes.
 func (u unimplementedAccessor) ARPSubscribe(_ chan ARPUpdate, _ chan struct{}) error {
 	return fmt.Errorf("unimplemented ARPSubscribe method")
+}
+
+// InterfaceState returns unimplemented when asked to manipulate an interface
+// state.
+func (u unimplementedAccessor) InterfaceState(_ string, _ IntState) error {
+	return fmt.Errorf("unimplemented InterfaceState method")
 }
 
 // accessor is the implementation of the network accessor that should be used. It
@@ -229,4 +241,24 @@ func ARPSubscribe(updates chan ARPUpdate, done chan struct{}) error {
 // Interfaces returns a list of interfaces from the local system.
 func Interfaces() ([]*Interface, error) {
 	return accessor.Interfaces()
+}
+
+// IntState sets enumerated state values that an interface
+// can use.
+type IntState int64
+
+const (
+	InterfaceStateUnknown IntState = iota
+	// InterfaceUp sets a link to administratively and operationally
+	// up.
+	InterfaceUp
+	// InterfaceDown sets a link to administratively and operationally
+	// down.
+	InterfaceDown
+)
+
+// InterfaceState changes the administrative state of an interface
+// on the local system.
+func InterfaceState(name string, state IntState) error {
+	return accessor.InterfaceState(name, state)
 }
