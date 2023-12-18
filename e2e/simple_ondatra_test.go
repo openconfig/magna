@@ -11,15 +11,14 @@ import (
 
 	"github.com/open-traffic-generator/snappi/gosnappi"
 	"github.com/openconfig/featureprofiles/topologies/binding"
+	tpb "github.com/openconfig/kne/proto/topo"
+	mpb "github.com/openconfig/magna/proto/mirror"
 	"github.com/openconfig/ondatra"
 	"github.com/openconfig/ondatra/gnmi"
 	"github.com/openconfig/ondatra/knebind/solver"
 	"github.com/openconfig/ondatra/otg"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	tpb "github.com/openconfig/kne/proto/topo"
-	mpb "github.com/openconfig/magna/proto/mirror"
 )
 
 const (
@@ -220,6 +219,38 @@ func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, s
 	mplsInner.BottomOfStack().SetChoice("value").SetValue(1)
 
 	ip4 := mplsFlow.Packet().Add().Ipv4()
+	ip4.Src().SetChoice("value").SetValue(srcv4)
+	ip4.Dst().SetChoice("value").SetValue(dstv4)
+	ip4.Version().SetChoice("value").SetValue(4)
+
+}
+
+// addIPv4Flow adds a new IPv4 flow to the specified otgCfg. The flow is named
+// according to the name argument, and runs between a srcName and dstName port,
+// with the srcv4 IPv4 source address, and dstv4 destination address. The flow
+// runs at pps packets per second, until totPackets packets have been sent. If
+// totPackets is 0, packets are sent at pps until the flow is terminated
+// through OTG.
+func addIPv4Flow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, srcv4, dstv4 string, pps uint64, totPackets uint32) {
+	ipFLow := otgCfg.Flows().Add().SetName(name)
+	ipFLow.Metrics().SetEnable(true)
+	ipFLow.TxRx().Port().SetTxName(srcName).SetRxNames([]string{dstName})
+
+	ipFLow.Rate().SetChoice("pps").SetPps(pps)
+	if totPackets != 0 {
+		ipFLow.Duration().SetChoice("fixed_packets").FixedPackets().SetPackets(totPackets)
+	}
+
+	// OTG specifies that the order of the <flow>.Packet().Add() calls determines
+	// the stack of headers that are to be used, starting at the outer-most and
+	// ending with the inner-most.
+
+	// Set up ethernet layer.
+	eth := ipFLow.Packet().Add().Ethernet()
+	eth.Src().SetChoice("value").SetValue(ateSrc.MAC)
+	eth.Dst().SetChoice("value").SetValue(ateDst.MAC)
+
+	ip4 := ipFLow.Packet().Add().Ipv4()
 	ip4.Src().SetChoice("value").SetValue(srcv4)
 	ip4.Dst().SetChoice("value").SetValue(dstv4)
 	ip4.Version().SetChoice("value").SetValue(4)

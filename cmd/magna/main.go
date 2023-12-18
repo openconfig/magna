@@ -21,6 +21,8 @@ import (
 
 	"github.com/go-ping/ping"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/magna/flows/ip"
 	"github.com/openconfig/magna/flows/mpls"
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem"
@@ -30,8 +32,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"k8s.io/klog/v2"
-
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 func main() {
@@ -66,8 +66,15 @@ func main() {
 		klog.Exitf("cannot initialise MPLS flow handler, %v", err)
 	}
 
+	ipFH, ipTask, err := ip.New()
+	if err != nil {
+		klog.Exitf("cannot initialise IP flow handler, %v", err)
+	}
+
 	otgSrv.AddFlowHandlers(fh)
+	otgSrv.AddFlowHandlers(ipFH)
 	telemSrv.AddTask(task)
+	telemSrv.AddTask(ipTask)
 
 	hintCh := make(chan lwotg.Hint, 100)
 	otgSrv.SetHintChannel(hintCh)
