@@ -487,6 +487,7 @@ func TestHeaders(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("did not get expected error, got: %v, wantErr? %v", err, tt.wantErr)
 			}
+
 			if len(got) < 2 {
 				return
 			}
@@ -543,8 +544,168 @@ func TestBPFFilter(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("bpfFilter(%v): did not get expected err, got: %v, wantErr? %v", tt.inHeaders, err, tt.wantErr)
 			}
+
 			if got != tt.wantFilter {
 				t.Fatalf(`bpfFilter(%v): did not get expected filter, got: "%s", want: "%s"`, tt.inHeaders, got, tt.wantFilter)
+			}
+		})
+	}
+}
+
+func TestPacketInFlow(t *testing.T) {
+
+	mac, err := net.ParseMAC("16:61:ee:09:bc:dc")
+	if err != nil {
+		t.Fatalf("cannot parse MAC, %v", err)
+	}
+
+	simplePacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version: 4,
+			SrcIP:   net.ParseIP("1.1.1.1"),
+			DstIP:   net.ParseIP("2.2.2.2"),
+		},
+	}
+
+	stackedPacket := []gopacket.SerializableLayer{
+		&layers.Ethernet{
+			SrcMAC:       mac,
+			DstMAC:       mac,
+			EthernetType: layers.EthernetTypeMPLSUnicast,
+		},
+		&layers.MPLS{
+			Label:       42,
+			TTL:         100,
+			StackBottom: false,
+		},
+		&layers.MPLS{
+			Label:       44,
+			TTL:         200,
+			StackBottom: true,
+		},
+		&layers.IPv4{
+			Version: 4,
+			SrcIP:   net.ParseIP("1.2.3.4"),
+			DstIP:   net.ParseIP("2.3.4.5"),
+		},
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		ComputeChecksums: true,
+		FixLengths:       true,
+	}
+
+	gopacket.SerializeLayers(buf, opts, simplePacket...)
+	simplePkt := buf.Bytes()
+	inSimple := gopacket.NewPacket(simplePkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	gopacket.SerializeLayers(buf, opts, stackedPacket...)
+	stackedPkt := buf.Bytes()
+	inStacked := gopacket.NewPacket(stackedPkt, layers.LinkTypeEthernet, gopacket.Default)
+
+	tests := []struct {
+		desc      string
+		inHeaders []gopacket.SerializableLayer
+		inPacket  gopacket.Packet
+		want      bool
+		wantErr   bool
+	}{{
+		desc: "not in flow, not enough headers in spec",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{
+				SrcMAC: mac,
+				DstMAC: mac,
+			},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "not in flow, no ipv4 header in spec",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "in flow, matching ipv4 header",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.1.1.1"),
+				DstIP:   net.ParseIP("2.2.2.2"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inSimple,
+		want:     true,
+	}, {
+		desc: "not in flow, no matching ipv4 header",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.1.1.1"),
+				DstIP:   net.ParseIP("100.100.100.100"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inSimple,
+		want:     false,
+	}, {
+		desc: "in flow, stacked packet",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("2.3.4.5"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inStacked,
+		want:     true,
+	}, {
+		desc: "not in flow, stacked packet",
+		inHeaders: []gopacket.SerializableLayer{
+			&layers.Ethernet{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.MPLS{},
+			&layers.IPv4{
+				Version: 4,
+				SrcIP:   net.ParseIP("1.2.3.4"),
+				DstIP:   net.ParseIP("1.2.3.5"),
+			},
+			gopacket.Payload([]byte{1, 2, 3, 4}),
+		},
+		inPacket: inStacked,
+		want:     false,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got := packetInFlow(tt.inHeaders, tt.inPacket)
+			if got != tt.want {
+				t.Fatalf("packetInFlow(hdrs, packet): didn't get expected result, got: %v, want: %v", got, tt.want)
 			}
 		})
 	}
