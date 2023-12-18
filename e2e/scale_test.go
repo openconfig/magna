@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	mpb "github.com/openconfig/magna/proto/mirror"
 	"github.com/openconfig/ondatra"
 	"github.com/openconfig/ondatra/gnmi"
 )
@@ -83,7 +84,7 @@ func TestScaleMPLS(t *testing.T) {
 			maddr := mirrorAddr(t)
 			client, stop := mirrorClient(t, maddr)
 			defer stop()
-			startTwoPortMirror(t, client)
+			startTwoPortMirror(t, client, mpb.StartRequest_TT_MPLS)
 			time.Sleep(1 * time.Second)
 			defer func() { stopTwoPortMirror(t, client) }()
 
@@ -192,7 +193,7 @@ func TestScaleIPv4(t *testing.T) {
 			maddr := mirrorAddr(t)
 			client, stop := mirrorClient(t, maddr)
 			defer stop()
-			startTwoPortMirror(t, client)
+			startTwoPortMirror(t, client, mpb.StartRequest_TT_IP)
 			time.Sleep(1 * time.Second)
 			defer func() { stopTwoPortMirror(t, client) }()
 

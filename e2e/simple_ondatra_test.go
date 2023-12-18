@@ -126,12 +126,13 @@ func mirrorClient(t *testing.T, addr string) (mpb.MirrorClient, func() error) {
 
 // startTwoPortMirror begins traffic mirroring between port1 and port2 on the mirror
 // container in the topology.
-func startTwoPortMirror(t *testing.T, client mpb.MirrorClient) {
+func startTwoPortMirror(t *testing.T, client mpb.MirrorClient, kind mpb.StartRequest_TrafficType) {
 	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
 	startMirrors(t, client, &mpb.StartRequest{
-		From: mirror.Port(t, "port1").Name(),
-		To:   mirror.Port(t, "port2").Name(),
+		From:        mirror.Port(t, "port1").Name(),
+		To:          mirror.Port(t, "port2").Name(),
+		TrafficType: kind,
 	})
 }
 
@@ -179,7 +180,7 @@ func TestMirror(t *testing.T) {
 	addr := mirrorAddr(t)
 	client, stop := mirrorClient(t, addr)
 	defer stop()
-	startTwoPortMirror(t, client)
+	startTwoPortMirror(t, client, mpb.StartRequest_TT_MPLS)
 	time.Sleep(1 * time.Second)
 	stopTwoPortMirror(t, client)
 }
@@ -272,7 +273,7 @@ func TestBasicMPLS(t *testing.T) {
 	maddr := mirrorAddr(t)
 	client, stop := mirrorClient(t, maddr)
 	defer stop()
-	startTwoPortMirror(t, client)
+	startTwoPortMirror(t, client, mpb.StartRequest_TT_MPLS)
 	time.Sleep(1 * time.Second)
 	defer func() { stopTwoPortMirror(t, client) }()
 
@@ -373,7 +374,7 @@ func TestMPLSFlowsTwoPorts(t *testing.T) {
 			maddr := mirrorAddr(t)
 			client, stop := mirrorClient(t, maddr)
 			defer stop()
-			startTwoPortMirror(t, client)
+			startTwoPortMirror(t, client, mpb.StartRequest_TT_MPLS)
 			time.Sleep(1 * time.Second)
 			defer func() { stopTwoPortMirror(t, client) }()
 
