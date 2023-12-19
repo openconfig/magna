@@ -13,8 +13,18 @@ service Mirror {
 }
 
 message StartRequest {
+  enum TrafficType {
+    TT_UNKNOWN = 0;
+
+    // Only mirror MPLS traffic.
+    TT_MPLS = 1;
+
+    // Only mirror IP traffic.
+    TT_IP = 2;
+  }
   string from = 1;
   string to = 2;
+  TrafficType traffic_type = 3;
 }
 
 message StartResponse {}

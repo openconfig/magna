@@ -9,12 +9,10 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-
+	mpb "github.com/openconfig/magna/proto/mirror"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
-
-	mpb "github.com/openconfig/magna/proto/mirror"
 )
 
 type Server struct {
@@ -49,6 +47,18 @@ const (
 	packetSize = 9000
 )
 
+func ipFilter(p gopacket.Packet) bool {
+	e, ok := p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
+	if !ok {
+		return false
+	}
+	if e.EthernetType != layers.EthernetTypeIPv4 {
+		return false
+	}
+	klog.Infof("copying IP packet, %v", p)
+	return true
+}
+
 // mplsFilter returns true if a packet is an MPLS unicast packet.
 func mplsFilter(p gopacket.Packet) bool {
 	e, ok := p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
@@ -58,7 +68,7 @@ func mplsFilter(p gopacket.Packet) bool {
 	if e.EthernetType != layers.EthernetTypeMPLSUnicast {
 		return false
 	}
-	klog.Infof("copying packet, %v", p)
+	klog.Infof("copying MPLS packet, %v", p)
 	return true
 }
 
@@ -152,6 +162,13 @@ func (s *Server) Start(ctx context.Context, req *mpb.StartRequest) (*mpb.StartRe
 	}
 	if s.sessionExists(req.From, req.To) {
 		return nil, status.Errorf(codes.AlreadyExists, "session between %s and %s already exists", req.From, req.To)
+	}
+
+	switch req.TrafficType {
+	case mpb.StartRequest_TT_IP:
+		filterFunc = ipFilter
+	case mpb.StartRequest_TT_MPLS:
+		filterFunc = mplsFilter
 	}
 
 	fn := copyFunc(req.From, req.To, filterFunc)

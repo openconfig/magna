@@ -83,7 +83,7 @@ func (s *Server) handleFlows(flows []*otg.Flow) ([]*TXRXWrapper, error) {
 		for _, fn := range s.flowHandlers {
 			txrx, ok, err := fn(flow, intfs)
 			switch {
-			case err != nil:
+			case ok && err != nil:
 				// The flow could be handled, but an error occurred.
 				return nil, status.Errorf(codes.Internal, "error generating flows, %v", err)
 			case !ok:
