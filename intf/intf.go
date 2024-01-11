@@ -262,3 +262,8 @@ const (
 func InterfaceState(name string, state IntState) error {
 	return accessor.InterfaceState(name, state)
 }
+
+// OverrideAccessor overrides the package network accessor to custom implementation.
+func OverrideAccessor(acc NetworkAccessor) {
+	accessor = acc
+}

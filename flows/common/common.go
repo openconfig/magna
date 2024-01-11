@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	"github.com/openconfig/magna/lwotg"
@@ -28,6 +29,73 @@ type matchFunc func([]gopacket.SerializableLayer, gopacket.Packet) bool
 // bpfFunc is a function that generates a BPF filter that matches packets in
 // hdrs.
 type bpfFunc func([]gopacket.SerializableLayer) (string, error)
+
+// PortCreator is an interface for creating ports.
+type PortCreator interface {
+	CreatePort(name string) (Port, error)
+}
+
+// Port is interface for reading and writing to a port.
+type Port interface {
+	gopacket.PacketDataSource
+	// WritePacketData writes the frame to the port.
+	WritePacketData(data []byte) error
+	// Close closes the port.
+	Close()
+	// LinkType the layer which packet are processed.
+	LinkType() layers.LinkType
+	// SetSetBPFFilter sets the filter.
+	SetBPFFilter(string) error
+}
+
+// pcapPort contains both an inactive and active handle.
+type pcapPort struct {
+	*pcap.Handle
+	ih *pcap.InactiveHandle
+}
+
+// Close cleans up the inactive handle and closes the active one.
+func (p *pcapPort) Close() {
+	p.ih.CleanUp()
+	p.Handle.Close()
+}
+
+// pcapCreator implements the PortCreator interface for pcap handles.
+type pcapCreator struct {
+}
+
+var _ PortCreator = &pcapCreator{}
+
+// CreatePort creates a new port using a pcap handle.
+func (p *pcapCreator) CreatePort(name string) (Port, error) {
+	ih, err := pcap.NewInactiveHandle(name)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create handle, err: %v", err)
+	}
+	if err := ih.SetImmediateMode(true); err != nil {
+		return nil, fmt.Errorf("cannot set immediate mode on handle, err: %v", err)
+
+	}
+
+	if err := ih.SetPromisc(false); err != nil {
+		return nil, fmt.Errorf("cannot set promiscous mode, err: %v", err)
+	}
+
+	if err := ih.SetSnapLen(packetBytes); err != nil {
+		return nil, fmt.Errorf("cannot set packet length, err: %v", err)
+	}
+
+	handle, err := ih.Activate()
+	if err != nil {
+		return nil, fmt.Errorf("%s Tx error: %v", name, err)
+	}
+	return &pcapPort{
+		Handle: handle,
+		ih:     ih,
+	}, nil
+}
+
+var portCreator PortCreator = &pcapCreator{}
 
 // Handler creates a new flow generator function based on the header and match
 // function provided.
@@ -82,32 +150,12 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 
 			klog.Infof("%s Tx interface %s", flow.GetName(), tx)
 
-			ih, err := pcap.NewInactiveHandle(tx)
+			port, err := portCreator.CreatePort(tx)
 			if err != nil {
-				klog.Errorf("cannot create handle, err: %v", err)
-				return
-			}
-			defer ih.CleanUp()
-			if err := ih.SetImmediateMode(true); err != nil {
-				klog.Errorf("cannot set immediate mode on handle, err: %v", err)
-				return
+				klog.Errorf("failed to create port, err: %v", err)
 			}
 
-			if err := ih.SetPromisc(false); err != nil {
-				klog.Errorf("cannot set promiscous mode, err: %v", err)
-				return
-			}
-
-			if err := ih.SetSnapLen(packetBytes); err != nil {
-				klog.Errorf("cannot set packet length, err: %v", err)
-			}
-
-			handle, err := ih.Activate()
-			if err != nil {
-				klog.Errorf("%s Tx error: %v", flow.GetName(), err)
-				return
-			}
-			defer handle.Close()
+			defer port.Close()
 
 			f.setTransmit(true)
 			// runSentPackets is the total number of packets that we have sent this run - i.e., since we
@@ -140,7 +188,7 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 								stopFlow = true
 								break
 							}
-							if err := handle.WritePacketData(buf.Bytes()); err != nil {
+							if err := port.WritePacketData(buf.Bytes()); err != nil {
 								klog.Errorf("%s cannot write packet on interface %s, %v", flow.GetName(), tx, err)
 								return
 							}
@@ -159,33 +207,11 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 
 		recvFunc := func(controllerID string, stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.GetName(), rx)
-			ih, err := pcap.NewInactiveHandle(rx)
+			port, err := portCreator.CreatePort(rx)
 			if err != nil {
-				klog.Errorf("cannot create handle, err: %v", err)
+				klog.Errorf("cannot create port, err: %v", err)
 				return
 			}
-			defer ih.CleanUp()
-			if err := ih.SetImmediateMode(true); err != nil {
-				klog.Errorf("cannot set immediate mode on handle, err: %v", err)
-				return
-			}
-
-			if err := ih.SetPromisc(true); err != nil {
-				klog.Errorf("cannot set promiscous mode, err: %v", err)
-				return
-			}
-
-			if err := ih.SetSnapLen(packetBytes); err != nil {
-				klog.Errorf("cannot set packet length, err: %v", err)
-				return
-			}
-
-			handle, err := ih.Activate()
-			if err != nil {
-				klog.Errorf("%s Rx error: %v", flow.GetName(), err)
-				return
-			}
-			defer handle.Close()
 
 			// Set a BPF filter on the handle, this avoids our code needing to compare every
 			// packet that it receives, and rather asks the PCAP library to filter for us.
@@ -197,13 +223,13 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 			case filter == "":
 				klog.Warningf("%s: filter was nil, all goroutines will receive all packets, possible scale reduction", flow.GetName())
 			default:
-				if err := handle.SetBPFFilter(filter); err != nil {
+				if err := port.SetBPFFilter(filter); err != nil {
 					klog.Errorf("%s: cannot set packet filter, err: %v", flow.GetName(), err)
 					return
 				}
 			}
 
-			ps := gopacket.NewPacketSource(handle, handle.LinkType())
+			ps := gopacket.NewPacketSource(port, port.LinkType())
 			packetCh := ps.Packets()
 			f := reporter.Flow(flow.GetName())
 
@@ -354,4 +380,9 @@ type stats struct {
 	Octets *val
 	// pkts indicates the total number of packets that have been sent.
 	Pkts *val
+}
+
+// OverridePortCreator sets a custom implementation of the port creator.
+func OverridePortCreator(pc PortCreator) {
+	portCreator = pc
 }
