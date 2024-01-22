@@ -14,8 +14,8 @@ import (
 	tpb "github.com/openconfig/kne/proto/topo"
 	mpb "github.com/openconfig/magna/proto/mirror"
 	"github.com/openconfig/ondatra"
+	bind "github.com/openconfig/ondatra/binding"
 	"github.com/openconfig/ondatra/gnmi"
-	"github.com/openconfig/ondatra/knebind/solver"
 	"github.com/openconfig/ondatra/otg"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -69,7 +69,7 @@ func TestMain(m *testing.M) {
 // above. It returns the OTG configuration object.
 func configureATEInterfaces(t *testing.T, ate *ondatra.ATEDevice, srcATE, dstATE *intf) (gosnappi.Config, error) {
 	otg := ate.OTG()
-	topology := otg.NewConfig(t)
+	topology := gosnappi.NewConfig()
 	for _, p := range []*intf{ateSrc, ateDst, ateAuxDst} {
 		topology.Ports().Add().SetName(p.Name)
 		dev := topology.Devices().Add().SetName(p.Name)
@@ -77,7 +77,7 @@ func configureATEInterfaces(t *testing.T, ate *ondatra.ATEDevice, srcATE, dstATE
 		eth.Connection().SetPortName(dev.Name())
 	}
 
-	c, err := topology.ToJson()
+	c, err := topology.Marshal().ToJson()
 	if err != nil {
 		return topology, err
 	}
@@ -102,10 +102,15 @@ func pushBaseConfigs(t *testing.T, ate *ondatra.ATEDevice) gosnappi.Config {
 func mirrorAddr(t *testing.T) string {
 	t.Helper()
 	mirror := ondatra.DUT(t, "mirror")
-	data := mirror.CustomData(solver.KNEServiceMapKey).(map[string]*tpb.Service)
-	m := data["mirror-controller"]
-	if m == nil {
-		t.Fatalf("cannot find mirror data, got: %v", data)
+	var servDUT interface {
+		Service(string) (*tpb.Service, error)
+	}
+	if err := bind.DUTAs(mirror.RawAPIs().BindingDUT(), &servDUT); err != nil {
+		t.Fatalf("DUT does not support Service function: %v", err)
+	}
+	m, err := servDUT.Service("mirror-controller")
+	if err != nil {
+		t.Fatalf("cannot fetch mirror-controller service: %v", err)
 	}
 	return net.JoinHostPort(m.GetOutsideIp(), strconv.Itoa(int(m.GetOutside())))
 }
@@ -196,9 +201,9 @@ func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, s
 	mplsFlow.Metrics().SetEnable(true)
 	mplsFlow.TxRx().Port().SetTxName(srcName).SetRxNames([]string{dstName})
 
-	mplsFlow.Rate().SetChoice("pps").SetPps(pps)
+	mplsFlow.Rate().SetPps(pps)
 	if totPackets != 0 {
-		mplsFlow.Duration().SetChoice("fixed_packets").FixedPackets().SetPackets(totPackets)
+		mplsFlow.Duration().FixedPackets().SetPackets(totPackets)
 	}
 
 	// OTG specifies that the order of the <flow>.Packet().Add() calls determines
@@ -207,22 +212,22 @@ func addMPLSFlow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, s
 
 	// Set up ethernet layer.
 	eth := mplsFlow.Packet().Add().Ethernet()
-	eth.Src().SetChoice("value").SetValue(ateSrc.MAC)
-	eth.Dst().SetChoice("value").SetValue(ateDst.MAC)
+	eth.Src().SetValue(ateSrc.MAC)
+	eth.Dst().SetValue(ateDst.MAC)
 
 	// Set up MPLS layer with destination label.
 	mpls := mplsFlow.Packet().Add().Mpls()
-	mpls.Label().SetChoice("value").SetValue(destinationLabel)
-	mpls.BottomOfStack().SetChoice("value").SetValue(0)
+	mpls.Label().SetValue(destinationLabel)
+	mpls.BottomOfStack().SetValue(0)
 
 	mplsInner := mplsFlow.Packet().Add().Mpls()
-	mplsInner.Label().SetChoice("value").SetValue(innerLabel)
-	mplsInner.BottomOfStack().SetChoice("value").SetValue(1)
+	mplsInner.Label().SetValue(innerLabel)
+	mplsInner.BottomOfStack().SetValue(1)
 
 	ip4 := mplsFlow.Packet().Add().Ipv4()
-	ip4.Src().SetChoice("value").SetValue(srcv4)
-	ip4.Dst().SetChoice("value").SetValue(dstv4)
-	ip4.Version().SetChoice("value").SetValue(4)
+	ip4.Src().SetValue(srcv4)
+	ip4.Dst().SetValue(dstv4)
+	ip4.Version().SetValue(4)
 
 }
 
@@ -237,9 +242,9 @@ func addIPv4Flow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, s
 	ipFLow.Metrics().SetEnable(true)
 	ipFLow.TxRx().Port().SetTxName(srcName).SetRxNames([]string{dstName})
 
-	ipFLow.Rate().SetChoice("pps").SetPps(pps)
+	ipFLow.Rate().SetPps(pps)
 	if totPackets != 0 {
-		ipFLow.Duration().SetChoice("fixed_packets").FixedPackets().SetPackets(totPackets)
+		ipFLow.Duration().FixedPackets().SetPackets(totPackets)
 	}
 
 	// OTG specifies that the order of the <flow>.Packet().Add() calls determines
@@ -248,13 +253,13 @@ func addIPv4Flow(t *testing.T, otgCfg gosnappi.Config, name, srcName, dstName, s
 
 	// Set up ethernet layer.
 	eth := ipFLow.Packet().Add().Ethernet()
-	eth.Src().SetChoice("value").SetValue(ateSrc.MAC)
-	eth.Dst().SetChoice("value").SetValue(ateDst.MAC)
+	eth.Src().SetValue(ateSrc.MAC)
+	eth.Dst().SetValue(ateDst.MAC)
 
 	ip4 := ipFLow.Packet().Add().Ipv4()
-	ip4.Src().SetChoice("value").SetValue(srcv4)
-	ip4.Dst().SetChoice("value").SetValue(dstv4)
-	ip4.Version().SetChoice("value").SetValue(4)
+	ip4.Src().SetValue(srcv4)
+	ip4.Dst().SetValue(dstv4)
+	ip4.Version().SetValue(4)
 
 }
 
