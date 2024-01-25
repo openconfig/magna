@@ -42,9 +42,10 @@ type Port interface {
 	WritePacketData(data []byte) error
 	// Close closes the port.
 	Close()
-	// LinkType the layer which packet are processed.
+	// LinkType specifies the layer at which packet written to the port are processed.
 	LinkType() layers.LinkType
-	// SetSetBPFFilter sets the filter.
+	// SetBPFFilter sets a Berkeley Packet Filtering (BPF) filter for the port.
+	// When specified, only packets matching the BPF filter are read from the port.
 	SetBPFFilter(string) error
 }
 
