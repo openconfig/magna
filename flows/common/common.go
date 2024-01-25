@@ -208,9 +208,9 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 
 		recvFunc := func(controllerID string, stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.GetName(), rx)
-			port, err := handleCreator.CreateHandle(rx)
+			handle, err := handleCreator.CreateHandle(rx)
 			if err != nil {
-				klog.Errorf("cannot create port, err: %v", err)
+				klog.Errorf("cannot create handle, err: %v", err)
 				return
 			}
 
@@ -224,13 +224,13 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 			case filter == "":
 				klog.Warningf("%s: filter was nil, all goroutines will receive all packets, possible scale reduction", flow.GetName())
 			default:
-				if err := port.SetBPFFilter(filter); err != nil {
+				if err := handle.SetBPFFilter(filter); err != nil {
 					klog.Errorf("%s: cannot set packet filter, err: %v", flow.GetName(), err)
 					return
 				}
 			}
 
-			ps := gopacket.NewPacketSource(port, port.LinkType())
+			ps := gopacket.NewPacketSource(handle, handle.LinkType())
 			packetCh := ps.Packets()
 			f := reporter.Flow(flow.GetName())
 
