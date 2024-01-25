@@ -30,9 +30,9 @@ type matchFunc func([]gopacket.SerializableLayer, gopacket.Packet) bool
 // hdrs.
 type bpfFunc func([]gopacket.SerializableLayer) (string, error)
 
-// PortCreator is an interface for creating ports.
-type PortCreator interface {
-	CreatePort(name string) (Port, error)
+// HandleCreator is an interface for creating handles.
+type HandleCreator interface {
+	CreateHandle(name string) (Port, error)
 }
 
 // Port is interface for reading and writing to a port.
@@ -65,10 +65,10 @@ func (p *pcapPort) Close() {
 type pcapCreator struct {
 }
 
-var _ PortCreator = &pcapCreator{}
+var _ HandleCreator = &pcapCreator{}
 
-// CreatePort creates a new port using a pcap handle.
-func (p *pcapCreator) CreatePort(name string) (Port, error) {
+// CreateHandle creates a new port using a pcap handle.
+func (p *pcapCreator) CreateHandle(name string) (Port, error) {
 	ih, err := pcap.NewInactiveHandle(name)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create handle, err: %v", err)
@@ -96,7 +96,7 @@ func (p *pcapCreator) CreatePort(name string) (Port, error) {
 	}, nil
 }
 
-var portCreator PortCreator = &pcapCreator{}
+var handleCreator HandleCreator = &pcapCreator{}
 
 // Handler creates a new flow generator function based on the header and match
 // function provided.
@@ -151,12 +151,12 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 
 			klog.Infof("%s Tx interface %s", flow.GetName(), tx)
 
-			port, err := portCreator.CreatePort(tx)
+			handle, err := handleCreator.CreateHandle(tx)
 			if err != nil {
-				klog.Errorf("failed to create port, err: %v", err)
+				klog.Errorf("failed to create handle, err: %v", err)
 			}
 
-			defer port.Close()
+			defer handle.Close()
 
 			f.setTransmit(true)
 			// runSentPackets is the total number of packets that we have sent this run - i.e., since we
@@ -189,7 +189,7 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 								stopFlow = true
 								break
 							}
-							if err := port.WritePacketData(buf.Bytes()); err != nil {
+							if err := handle.WritePacketData(buf.Bytes()); err != nil {
 								klog.Errorf("%s cannot write packet on interface %s, %v", flow.GetName(), tx, err)
 								return
 							}
@@ -208,7 +208,7 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 
 		recvFunc := func(controllerID string, stop, readyForTx chan struct{}) {
 			klog.Infof("%s receive function started on interface %s", flow.GetName(), rx)
-			port, err := portCreator.CreatePort(rx)
+			port, err := handleCreator.CreateHandle(rx)
 			if err != nil {
 				klog.Errorf("cannot create port, err: %v", err)
 				return
@@ -383,7 +383,7 @@ type stats struct {
 	Pkts *val
 }
 
-// OverridePortCreator sets a custom implementation of the port creator.
-func OverridePortCreator(pc PortCreator) {
-	portCreator = pc
+// OverrideHandleCreator sets a custom implementation of the handle creator.
+func OverrideHandleCreator(pc HandleCreator) {
+	handleCreator = pc
 }
