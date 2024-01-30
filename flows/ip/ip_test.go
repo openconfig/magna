@@ -205,6 +205,7 @@ func TestHeaders(t *testing.T) {
 				},
 				&layers.IPv4{
 					Version: 4,
+					TTL:     32,
 					SrcIP:   net.ParseIP("1.1.1.1"),
 					DstIP:   net.ParseIP("1.1.1.2"),
 				},
@@ -253,9 +254,10 @@ func TestHeaders(t *testing.T) {
 					EthernetType: layers.EthernetTypeIPv6,
 				},
 				&layers.IPv6{
-					Version: 6,
-					SrcIP:   net.ParseIP("::1"),
-					DstIP:   net.ParseIP("::2"),
+					Version:  6,
+					HopLimit: 32,
+					SrcIP:    net.ParseIP("::1"),
+					DstIP:    net.ParseIP("::2"),
 				},
 			},
 		},
