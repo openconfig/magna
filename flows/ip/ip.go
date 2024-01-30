@@ -132,6 +132,7 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 				SrcIP:   srcIP,
 				DstIP:   dstIP,
 				Version: 4,
+				TTL:     32,
 			})
 	case ip6 != nil:
 		if dstT := ip6.GetIpv6().GetDst().GetChoice(); dstT != otg.PatternFlowIpv6Dst_Choice_value {
@@ -160,9 +161,10 @@ func headers(f *otg.Flow) ([]gopacket.SerializableLayer, error) {
 			EthernetType: layers.EthernetTypeIPv6,
 		},
 			&layers.IPv6{
-				SrcIP:   srcIP,
-				DstIP:   dstIP,
-				Version: 6,
+				SrcIP:    srcIP,
+				DstIP:    dstIP,
+				Version:  6,
+				HopLimit: 32,
 			})
 	}
 
