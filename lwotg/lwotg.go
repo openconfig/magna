@@ -13,6 +13,7 @@ import (
 	"github.com/openconfig/magna/intf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"k8s.io/klog/v2"
 )
 
@@ -180,6 +181,17 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 	s.cfg = req.Config
 
 	return &otg.SetConfigResponse{}, nil
+}
+
+// GetConfig retrieves the current OTG configuration from the lwotg instance, implementing the GetConfig
+// RPC.
+func (s *Server) GetConfig(_ context.Context, req *emptypb.Empty) (*otg.GetConfigResponse, error) {
+	if s.cfg == nil {
+		return nil, status.Errorf(codes.NotFound, "no configuration has been specified")
+	}
+	return &otg.GetConfigResponse{
+		Config: s.cfg,
+	}, nil
 }
 
 // setTrafficGenFns sets the functions that will be used to generate traffic
