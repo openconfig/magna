@@ -185,7 +185,7 @@ func (s *Server) SetConfig(ctx context.Context, req *otg.SetConfigRequest) (*otg
 
 // GetConfig retrieves the current OTG configuration from the lwotg instance, implementing the GetConfig
 // RPC.
-func (s *Server) GetConfig(_ context.Context, req *emptypb.Empty) (*otg.GetConfigResponse, error) {
+func (s *Server) GetConfig(_ context.Context, _ *emptypb.Empty) (*otg.GetConfigResponse, error) {
 	if s.cfg == nil {
 		return nil, status.Errorf(codes.NotFound, "no configuration has been specified")
 	}
