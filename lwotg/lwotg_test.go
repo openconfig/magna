@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestSetControlState(t *testing.T) {
@@ -334,6 +335,72 @@ func TestSetConfig(t *testing.T) {
 
 			if tt.wantFn != nil {
 				tt.wantFn(t)
+			}
+		})
+	}
+}
+
+func newServerAndClient(t *testing.T, lw *Server) otg.OpenapiClient {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("cannot listen, %v", err)
+	}
+	t.Cleanup(func() { l.Close() })
+
+	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	otg.RegisterOpenapiServer(s, lw)
+	go s.Serve(l)
+	t.Cleanup(s.Stop)
+
+	conn, err := grpc.Dial(l.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("cannot dial server %s, err: %v", l.Addr().String(), err)
+	}
+	c := otg.NewOpenapiClient(conn)
+	return c
+}
+
+func TestGetConfig(t *testing.T) {
+	tests := []struct {
+		desc            string
+		inInitialConfig *otg.Config
+		wantResponse    *otg.GetConfigResponse
+		wantErr         bool
+	}{{
+		desc:    "no input config",
+		wantErr: true,
+	}, {
+		desc: "specified configuration",
+		inInitialConfig: &otg.Config{
+			Ports: []*otg.Port{{
+				Name: proto.String("port-one"),
+			}},
+		},
+		wantResponse: &otg.GetConfigResponse{
+			Config: &otg.Config{
+				Ports: []*otg.Port{{
+					Name: proto.String("port-one"),
+				}},
+			},
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			lw := New()
+			lw.cfg = tt.inInitialConfig
+
+			c := newServerAndClient(t, lw)
+
+			got, err := c.GetConfig(context.Background(), &emptypb.Empty{})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetConfig(): did not get expected error, got: %v, wantErr? %v", got, tt.wantErr)
+			}
+
+			if diff := cmp.Diff(got, tt.wantResponse, protocmp.Transform()); diff != "" {
+				t.Fatalf("did not get expected result, diff(-got,+want):\n%s", diff)
 			}
 		})
 	}
