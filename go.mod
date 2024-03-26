@@ -16,7 +16,7 @@ require (
 	github.com/openconfig/ygot v0.29.18
 	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
 	google.golang.org/grpc v1.60.1
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 	k8s.io/klog/v2 v2.100.1
 )
 
