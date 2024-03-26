@@ -213,6 +213,7 @@ func Handler(fn hdrsFunc, bpfFn bpfFunc, match matchFunc, reporter *Reporter) lw
 				klog.Errorf("cannot create handle, err: %v", err)
 				return
 			}
+			defer handle.Close()
 
 			// Set a BPF filter on the handle, this avoids our code needing to compare every
 			// packet that it receives, and rather asks the PCAP library to filter for us.
