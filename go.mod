@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/go-ping/ping v1.1.0
-	github.com/golang/glog v1.2.0
+	github.com/golang/glog v1.2.4
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gopacket v1.1.19
 	github.com/open-traffic-generator/snappi/gosnappi v0.13.7
