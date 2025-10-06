@@ -345,7 +345,7 @@ type resp struct {
 func (s *Server) sendSubscribeResponse(r *resp, c *streamClient) error {
 	notification, err := MakeSubscribeResponse(r.n.Value(), r.dup)
 	if err != nil {
-		return status.Errorf(codes.Unknown, err.Error())
+		return status.Errorf(codes.Unknown, "%s", err.Error())
 	}
 
 	if pre := notification.GetUpdate().GetPrefix(); pre != nil {
