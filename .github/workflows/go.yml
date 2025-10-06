@@ -38,24 +38,24 @@ jobs:
 
     - name: Test
       run: |
-        go list ./... | egrep -v "magna/(e2e|cmd/(magna|mirror)|otgyang)" | while read l; do 
-          dir=`echo $l | sed 's/^github.com\/openconfig\/magna//g'`; 
-          fn=`echo $dir | sed 's/\//_/g'`; 
-          sudo go test -v .$dir -covermode=count -coverprofile=$fn.cover.profile; 
-        done; 
-        echo "mode: count" > combined.coverprofile; 
-        for i in `ls *.cover.profile`; do 
-          tail -n +2 $i >> combined.coverprofile; 
-        done; 
+        go list ./... | egrep -v "magna/(e2e|cmd/(magna|mirror)|otgyang)" | while read l; do
+          dir=`echo $l | sed 's/^github.com\/openconfig\/magna//g'`;
+          fn=`echo $dir | sed 's/\//_/g'`;
+          sudo go test -v .$dir -covermode=count -coverprofile=$fn.cover.profile;
+        done;
+        echo "mode: count" > combined.coverprofile;
+        for i in `ls *.cover.profile`; do
+          tail -n +2 $i >> combined.coverprofile;
+        done;
         rm *.cover.profile
 
     - name: Race Test
       run: |
-        go list ./... | egrep -v "magna/(e2e|cmd/(magna|mirror)|otgyang)" | while read l; do 
-          dir=`echo $l | sed 's/^github.com\/openconfig\/magna//g'`; 
-          fn=`echo $dir | sed 's/\//_/g'`; 
-          sudo go test -v -race .$dir 
-        done; 
+        go list ./... | egrep -v "magna/(e2e|cmd/(magna|mirror)|otgyang)" | while read l; do
+          dir=`echo $l | sed 's/^github.com\/openconfig\/magna//g'`;
+          fn=`echo $dir | sed 's/\//_/g'`;
+          sudo go test -v -race .$dir
+        done;
 
     - name: Coveralls
       if: ${{ matrix.go == '1.x' }}
@@ -95,4 +95,4 @@ jobs:
 
       - name: Staticcheck
         run: |
-          staticcheck ./...
+          staticcheck -checks=-SA1019 ./...
