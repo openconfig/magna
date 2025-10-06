@@ -1,6 +1,6 @@
 module github.com/openconfig/magna
 
-go 1.25.1
+go 1.24.7
 
 require (
 	github.com/golang/glog v1.2.5
