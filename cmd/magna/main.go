@@ -19,7 +19,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-ping/ping"
 	"github.com/open-traffic-generator/snappi/gosnappi/otg"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/magna/flows/ip"
@@ -27,6 +26,7 @@ import (
 	"github.com/openconfig/magna/lwotg"
 	"github.com/openconfig/magna/lwotgtelem"
 	"github.com/openconfig/magna/telemetry/arp"
+	ping "github.com/prometheus-community/pro-bing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"

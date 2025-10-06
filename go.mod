@@ -2,10 +2,7 @@ module github.com/openconfig/magna
 
 go 1.24.7
 
-toolchain go1.25.1
-
 require (
-	github.com/go-ping/ping v1.2.0
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/google/gopacket v1.1.19
@@ -16,6 +13,7 @@ require (
 	github.com/openconfig/kne v0.3.0
 	github.com/openconfig/ondatra v0.12.3
 	github.com/openconfig/ygot v0.34.0
+	github.com/prometheus-community/pro-bing v0.7.0
 	github.com/vishvananda/netlink v1.3.1
 	google.golang.org/grpc v1.75.1
 	google.golang.org/protobuf v1.36.10
