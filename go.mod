@@ -15,7 +15,7 @@ require (
 	github.com/openconfig/ygot v0.34.0
 	github.com/prometheus-community/pro-bing v0.8.0
 	github.com/vishvananda/netlink v1.3.1
-	google.golang.org/grpc v1.79.2
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	k8s.io/klog/v2 v2.140.0
 )
